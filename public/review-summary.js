@@ -60,7 +60,7 @@ const ReviewSummary=(()=>{
     const focus=document.activeElement;
     const ref=panel.contains(focus)?focus?.dataset.focus:null;
     const total=record.moves.length,isWin=metric==='win',waiting=!entries.length;
-    const values=waiting?[]:[blackValue(entries[0].best,entries[0].color),...entries.map(e=>blackValue(e.played,e.color))];
+    const values=waiting?[]:[blackValue(entries[0].before||entries[0].best,entries[0].color),...entries.map(e=>blackValue(e.played,e.color))];
     const turns=entries.filter(e=>e.turning);
     const extent=isWin?100:scoreRange(values);
     const tick=isWin?['100 %','50 %','0 %']:['+'+format.format(extent),'0','−'+format.format(extent)];

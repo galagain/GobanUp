@@ -76,28 +76,52 @@ const LocalAnalysis = (() => {
       render();
     } catch { badWorker(); }
   }
+  function positionKey(g,moves){
+    return JSON.stringify([g.n,g.start?.some(Boolean)?g.start:null,g.first||1,g.komi??6.5,g.rules||'chinese',moves]);
+  }
+  function snapshot(a,g,states,moves,backend){
+    const candidates=a.moves.filter(m=>m.visits>0 && (m.x===-1 ||
+      Go.play(states.at(-1),m.y*g.n+m.x,turnAt(g,moves.length),g.n,states))).slice(0,3);
+    if(!candidates.length && a.policy){
+      // On a slow device the first report can contain only the network policy.
+      const pass=g.n*g.n,side=turnAt(g,moves.length);
+      const ranked=Array.from(a.policy, (prior,p)=>({prior,p})).filter(v=>v.prior>=0 && v.p<=pass).sort((x,y)=>y.prior-x.prior);
+      const suggestion=ranked.find(({p})=>p===pass||Go.play(states.at(-1),p,side,g.n,states));
+      if(suggestion){
+        const {p,prior}=suggestion;
+        candidates.push({x:p===pass?-1:p%g.n,y:p===pass?-1:Math.floor(p/g.n),prior,visits:0,
+          scoreLead:a.rootScoreLead,winRate:a.rootWinRate,pv:[p===pass?'pass':coord(p,g.n)]});
+      }
+    }
+    return {win:a.rootWinRate,score:a.rootScoreLead,visits:a.rootVisits,candidates,
+      backend:({webgpu:'WebGPU',wasm:'WebAssembly',cpu:'CPU'})[backend]||'local'};
+  }
+  function remember(key,value){
+    cache.set(key,value);
+    if(cache.size>100)cache.delete(cache.keys().next().value);
+  }
+  function firstEstimate(key){return cache.get(key)?.first}
+  function rememberEstimate(key,estimate){
+    const existing=firstEstimate(key);
+    if(existing)return existing;
+    remember(key,{...estimate,first:estimate,complete:false});
+    return estimate;
+  }
   function receive({data}) {
     if (data.id!==serial || !current || data.canceled) return;
     if (!data.ok) { badWorker(); return; }
-    const a = data.analysis;
-    if (!a) return;
+    if (!data.analysis) return;
     ready = true;
-    const {states,n,moves} = current;
-    const candidates = a.moves.filter(m=>m.visits>0 && (m.x===-1 || Go.play(states.at(-1),m.y*n+m.x,(moves.length+current.first-1)%2+1,n,states))).slice(0,3);
-    result = {win:a.rootWinRate, score:a.rootScoreLead, visits:a.rootVisits,
-      candidates, backend:({webgpu:'WebGPU',wasm:'WebAssembly',cpu:'CPU'})[data.backend]||'local'};
-
-    result.complete=data.type==='katago:analyze_result';
+    const value=snapshot(data.analysis,current,current.states,current.moves,data.backend);
+    result={...value,first:firstEstimate(current.key)||value,complete:data.type==='katago:analyze_result'};
     if(result.complete)running=false;
-    cache.set(current.key,result);
-    if(cache.size>100)cache.delete(cache.keys().next().value);
+    remember(current.key,result);
     render();
   }
   function mount(g, index, allStates) {
     const moves = g.moves.slice(0,index);
     const first=g.first||1, komi=g.komi??6.5, rules=g.rules||'chinese';
-    const keyFor = line => JSON.stringify([g.n,g.start||null,first,komi,rules,line]);
-    const key=keyFor(moves);
+    const key=positionKey(g,moves);
     if (current?.key===key) {render();return;}
     cancel();
     current = {key, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
@@ -204,5 +228,5 @@ const LocalAnalysis = (() => {
     const button=event.target.closest('[data-kata]');
     if(button)control(button.dataset.kata);
   });
-  return {mount,detach,enable,analysisPayload};
+  return {mount,detach,enable,analysisPayload,positionKey,snapshot,firstEstimate,rememberEstimate};
 })();

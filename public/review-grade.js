@@ -13,24 +13,22 @@ export function play(Go,history,p,color,n){
   if(p===-1)return {board:history.at(-1),captured:0};
   return Go.play(history.at(-1),p,color,n,history);
 }
-function candidate(info,g,history,ply,Go){
-  if(!info || !Number.isFinite(info.scoreLead) || !Number.isFinite(info.winrate) || !info.visits)
-    throw Error('Évaluation moteur incomplète');
-  const move=point(info.move,g.n), steps=[],line=history.slice(), moves=[];
-  if (move===null) throw Error('Coordonnée moteur invalide');
-  const pv=info.pv?.[0]===info.move?info.pv:[info.move,...(info.pv||[])];
-  for(const text of pv.slice(0,10)){
-    const p=point(text,g.n);
+function candidate(move,pv,estimate,g,history,ply,Go){
+  if(!Number.isFinite(estimate.score)||!Number.isFinite(estimate.win))throw Error('Évaluation moteur incomplète');
+  const steps=[],line=history.slice(),moves=[];
+  const continuation=pv.map(text=>point(text.toLowerCase()==='pass'?'pass':text.toUpperCase(),g.n));
+  if(continuation[0]!==move)continuation.unshift(move);
+  for(const p of continuation.slice(0,10)){
     if(p===null)break;
     const next=play(Go,line,p,side(g,ply+moves.length),g.n);
     if(!next)break;
     steps.push(next);moves.push(p);line.push(next.board);
-    if(moves.length>=2&&moves.at(-1)===-1&&moves.at(-2)===-1)break;
+    if(p===-1 && (moves.length>1?moves.at(-2):g.moves[ply-1])===-1)break;
   }
   if(!moves.length)throw Error('Variante moteur illégale');
   const black=side(g,ply)===1;
-  return {move,coord:info.move,line:moves,steps,score:black?info.scoreLead:-info.scoreLead,
-    win:black?info.winrate:1-info.winrate,visits:info.visits};
+  return {move,coord:coordinate(move,g.n),line:moves,steps,score:black?estimate.score:-estimate.score,
+    win:black?estimate.win:1-estimate.win,visits:estimate.visits};
 }
 export function quality(same,loss,drop,bestWin){
   if(same)return 'best';
@@ -42,13 +40,14 @@ export function quality(same,loss,drop,bestWin){
   return 'good';
 }
 export function isTurningPoint(entry,previous){
-  if(Math.min(entry.best.visits,entry.played.visits,previous?.played.visits??Infinity)<12)return false;
-  const before=previous?(previous.color===entry.color?previous.played.win:1-previous.played.win):entry.best.win;
+  const shallow=Math.min(entry.best.visits,entry.played.visits,previous?.played.visits??Infinity)<12;
+  const before=previous?(previous.color===entry.color?previous.played.win:1-previous.played.win):(entry.before||entry.best).win;
   const after=entry.played.win;
   const swing=Math.abs(before-after);
   if(entry.badge==='brilliant')return after-before>=.12;
   if(!['blunder','mistake','missed'].includes(entry.badge)||before<=after)return false;
   const crossed=[.25,.45,.55,.75].some(bound=>before>=bound&&after<bound);
+  if(shallow)return entry.loss>=2 && entry.drop>=.15 && swing>=.15 && crossed;
   return entry.drop>=.08 && (swing>=.20 || (swing>=.10 && crossed));
 }
 function missedCapture(Go,g,ply,history,best,actual){
@@ -69,38 +68,19 @@ function sacrifice(g,Go,best){
   const group=Go.group(placed.board,best.move,g.n);
   if(group.stones.size<2 || ![...group.stones].every(p=>reply.board[p]===0) ||
      follow.captured<=group.stones.size)return null;
-  return `Dans la variante, ${best.coord} sacrifie ${group.stones.size} pierres puis ${coordinate(best.line[2],g.n)} en capture ${follow.captured}. Le choix est confirmé à recherche approfondie.`;
+  return `Dans la variante, ${best.coord} sacrifie ${group.stones.size} pierres puis ${coordinate(best.line[2],g.n)} en capture ${follow.captured}.`;
 }
-export async function evaluatePly({Go,g,ply,history,query}){
-  const color=side(g,ply),p=g.moves[ply],played=coordinate(p,g.n);
-  const ranked=async (visits,force)=> {
-    const response=await query(visits,force);
-    return {moves:[...response.moveInfos].sort((a,b)=>a.order-b.order),policy:response.policy};
-  };
-  let {moves,policy}=await ranked(96);
-  let best=candidate(moves[0],g,history,ply,Go);
-  const probability=policy?.[p];
-  let brilliant=null;
-  if(g.n===19 && best.move===p && p>=0 && Number.isFinite(probability) && probability>=0 && probability<0.02 && sacrifice(g,Go,best)){
-    ({moves}=await ranked(384));
-    best=candidate(moves[0],g,history,ply,Go);
-    const second=moves[1];
-    if(best.move===p && second?.visits>=12 && (moves[0].scoreLead-second.scoreLead)*(color===1?1:-1)>=2)
-      brilliant=sacrifice(g,Go,best);
-  }
-  if(best.visits<12)best=candidate((await ranked(48,best.coord)).moves[0],g,history,ply,Go);
-  let actual=best;
-  if(best.move!==p){
-    let found=moves.find(m=>m.move===played);
-    if(!found || found.visits<12)found=(await ranked(48,played)).moves[0];
-    actual=candidate(found,g,history,ply,Go);
-    if(actual.move!==p)throw Error('Le moteur n’a pas évalué le coup joué');
-  }
-  if(best.move!==p && best.win-actual.win>=.12 && Math.min(best.visits,actual.visits)<12){
-    if(best.visits<12)best=candidate((await ranked(128,best.coord)).moves[0],g,history,ply,Go);
-    if(actual.visits<12)actual=candidate((await ranked(128,played)).moves[0],g,history,ply,Go);
-  }
+export function evaluatePly({Go,g,ply,history,before,after}){
+  const color=side(g,ply),p=g.moves[ply],top=before.candidates[0];
+  if(!top)throw Error('Aucun coup proposé par le moteur.');
+  const bestMove=top.x<0?-1:top.y*g.n+top.x;
+  const best=candidate(bestMove,top.pv,bestMove===p?after:{score:top.scoreLead,win:top.winRate,visits:top.visits},g,history,ply,Go);
+  const playedLine=[coordinate(p,g.n),...(after.candidates[0]?.pv||[])];
+  const actual=candidate(p,playedLine,after,g,history,ply,Go);
   const loss=Math.max(0,+(best.score-actual.score).toFixed(5)),drop=Math.max(0,+(best.win-actual.win).toFixed(6));
+  const second=before.candidates[1];
+  const brilliant=g.n===19 && bestMove===p && top.prior>=0 && top.prior<.02 && top.visits>=12 && second?.visits>=12 &&
+    (top.scoreLead-second.scoreLead)*(color===1?1:-1)>=2 && sacrifice(g,Go,best);
   let badge=quality(best.move===p,loss,drop,best.win);
   let explanation;
   if(brilliant){badge='brilliant';explanation=brilliant}
@@ -121,5 +101,5 @@ export async function evaluatePly({Go,g,ply,history,query}){
     }
   }
   const compact=c=>({move:c.move,line:c.line,score:+c.score.toFixed(2),win:+c.win.toFixed(4),visits:c.visits});
-  return {ply:ply+1,color,badge,explanation,loss:+loss.toFixed(2),drop:+drop.toFixed(4),best:compact(best),played:compact(actual)};
+  return {ply:ply+1,color,badge,explanation,before:{win:color===1?before.win:1-before.win,score:color===1?before.score:-before.score},loss:+loss.toFixed(2),drop:+drop.toFixed(4),best:compact(best),played:compact(actual)};
 }

@@ -1,4 +1,4 @@
-import {evaluatePly,coordinate,isTurningPoint} from './review-grade.js';
+import {evaluatePly,isTurningPoint} from './review-grade.js';
 
 let database;
 function openCache(){
@@ -34,15 +34,21 @@ function workerSearch(worker,payload,signal){
     }
     worker.onerror=worker.onmessageerror=()=>finish(reject,Error('Moteur local indisponible.'));
     worker.onmessage=({data})=>{
-      if(data.id!==payload.id||data.type!=='katago:analyze_result')return;
-      if(data.ok && data.analysis)finish(resolve,data.analysis);
+      if(data.id!==payload.id)return;
+      if(data.type!=='katago:analyze_update'&&data.type!=='katago:analyze_result')return;
+      if(data.ok && data.analysis){
+        if(data.type==='katago:analyze_update'){
+          if(!data.analysis.moves.some(m=>m.visits>0))return;
+          worker.postMessage({type:'katago:cancel',analysisGroup:payload.analysisGroup,id:payload.id});
+        }
+        finish(resolve,data);
+      }
       else finish(reject,Error('Calcul local interrompu.'));
     };
     signal.addEventListener('abort',abort,{once:true});
     worker.postMessage(payload);
   });
 }
-const asCoord=s=>s.toLowerCase()==='pass'?'pass':s.toUpperCase();
 
 export async function reviewGame(source,scope,signal,publish){
   const g={...source,first:source.first||1};
@@ -56,40 +62,32 @@ export async function reviewGame(source,scope,signal,publish){
   publish(entries);
   if(entries.length===g.moves.length)return;
   const {states}=makeStates(g);
-  const worker=new Worker(new URL('katago/analysis-worker.js',document.baseURI),{name:'KataGo · bilan'});
-  let id=0;
+  let worker,id=0;
+  async function estimate(ply){
+    signal.throwIfAborted();
+    const moves=g.moves.slice(0,ply),key=LocalAnalysis.positionKey(g,moves);
+    const cached=LocalAnalysis.firstEstimate(key);
+    if(cached)return cached;
+    worker??=new Worker(new URL('katago/analysis-worker.js',document.baseURI),{name:'KataGo · bilan'});
+    const history=states.slice(0,ply+1);
+    const payload=LocalAnalysis.analysisPayload(g,history,moves);
+    // Stop at the first reporting interval used by the interactive analysis.
+    const data=await workerSearch(worker,{...payload,analysisGroup:'review',id:++id,maxTimeMs:payload.reportDuringSearchEveryMs},signal);
+    const first=LocalAnalysis.snapshot(data.analysis,g,history,moves,data.backend);
+    return LocalAnalysis.rememberEstimate(key,first);
+  }
   try{
+    let before=await estimate(entries.length);
     for(let ply=entries.length;ply<g.moves.length;ply++){
+      const after=await estimate(ply+1);
       signal.throwIfAborted();
-      const history=states.slice(0,ply+1),moves=g.moves.slice(0,ply);
-      const root=LocalAnalysis.analysisPayload(g,history,moves);
-      const query=async(visits,force)=>{
-        const p=force===undefined?null:force==='pass'?-1:'ABCDEFGHJKLMNOPQRST'.indexOf(force[0])+(g.n-Number(force.slice(1)))*g.n;
-        const options={analysisGroup:'review',reportDuringSearchEveryMs:0,nnRandomize:false,
-          visits,maxTimeMs:visits>100?15000:4500,topK:12};
-        const allow=p===null?undefined:[{moves:[{x:p<0?-1:p%g.n,y:p<0?-1:Math.floor(p/g.n)}],untilDepth:1}];
-        const result=await workerSearch(worker,{...root,...options,id:++id,allowMoves:allow},signal);
-        const moveInfos=result.moves.filter(m=>m.visits>0).map(m=>({
-          move:coordinate(m.x<0?-1:m.y*g.n+m.x,g.n),order:m.order,visits:m.visits,winrate:m.winRate,scoreLead:m.scoreLead,pv:m.pv.map(asCoord)
-        }));
-        if(p===null)return {moveInfos,policy:result.policy};
-        const found=moveInfos.find(m=>m.move===force);
-        if(found&&found.visits>=12)return {moveInfos:[found]};
-        // Some roots prune the requested move (including pass). Search its child position.
-        const next=p<0?history.at(-1):Go.play(history.at(-1),p,turnAt(g,ply),g.n,history)?.board;
-        if(!next)throw Error('Coup illégal dans la partie.');
-        const child=LocalAnalysis.analysisPayload(g,[...history,next],[...moves,p]);
-        const reply=await workerSearch(worker,{...child,...options,id:++id},signal);
-        return {moveInfos:[{move:force,order:0,visits:reply.rootVisits,winrate:reply.rootWinRate,
-          scoreLead:reply.rootScoreLead,pv:[force,...(reply.moves[0]?.pv||[]).map(asCoord)]}]};
-      };
-      const entry=await evaluatePly({Go,g,ply,history,query});
-      signal.throwIfAborted();
+      const entry=evaluatePly({Go,g,ply,history:states.slice(0,ply+1),before,after});
       entry.turning=isTurningPoint(entry,entries.at(-1));
       entries.push(entry);
+      before=after;
       await cacheRequest('readwrite',store=>store.put(entry,[key,entry.ply]));
       signal.throwIfAborted();
       publish(entries);
     }
-  }finally{worker.terminate()}
+  }finally{worker?.terminate()}
 }
