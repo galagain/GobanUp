@@ -3,14 +3,16 @@ const Cadences = (() => {
   const groups = [
     ['Bullet', ['1+0','1+1','2+1']],
     ['Blitz', ['3+0','3+2','5+0']],
-    ['Rapide', ['10+0','10+5','15+10']]
+    ['Rapide', ['10+0','10+5','15+10']],
+    ['En différé', ['1d','3d','7d']]
   ];
-  const more = [
-    ['Longue', ['20+0','30+0','30+20']],
-    ['En différé', ['1d','3d','7d']],
-    ['Libre', ['none']]
-  ];
-  const valid = id => [...groups,...more].some(([,ids])=>ids.includes(id));
+  const maxMinutes=1440, maxIncrement=3600;
+  function valid(id){
+    if(id==='none' || ['1d','3d','7d'].includes(id))return true;
+    if(typeof id!=='string' || !/^[1-9][0-9]{0,3}\+(?:0|[1-9][0-9]{0,3})$/.test(id))return false;
+    const [minutes,increment]=id.split('+').map(Number);
+    return minutes<=maxMinutes && increment<=maxIncrement;
+  }
   const daily = id => id.endsWith('d');
   function label(id){
     if(!id || id==='none')return 'Sans pendule';
@@ -39,5 +41,5 @@ const Cadences = (() => {
     }
     return {remaining,turn:stop?0:3-seat,since:now};
   }
-  return {groups,more,valid,label,initial,left,expired,advance};
+  return {groups,maxMinutes,maxIncrement,valid,label,initial,left,expired,advance};
 })();

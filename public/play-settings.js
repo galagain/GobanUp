@@ -17,49 +17,56 @@ const paceSymbols={
   Bullet:'<path d="m13 2-8 11h6l-1 7 8-12h-6z"/>',
   Blitz:'<path d="m7 4 6 7-6 8m7-15 6 7-6 8"/>',
   Rapide:'<circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l3 2M9 2h6m-3 0v3"/>',
-  Longue:'<path d="M5 3h14M5 21h14M7 3c0 5 1 6 5 9-4 3-5 4-5 9m10-18c0 5-1 6-5 9 4 3 5 4 5 9"/>',
-  'En différé':'<rect x="3.5" y="5.5" width="17" height="15" rx="3"/><path d="M8 3v5m8-5v5M4 11h16m-12 4h3"/>',
-  Libre:'<path d="M12 12c-2-3-3.5-4-5.5-4a4 4 0 0 0 0 8c4 0 7-8 11-8a4 4 0 0 1 0 8c-2 0-3.5-1-5.5-4Z"/>'
+  'En différé':'<rect x="3.5" y="5.5" width="17" height="15" rx="3"/><path d="M8 3v5m8-5v5M4 11h16m-12 4h3"/>'
 };
-const paceViews=new Map();
 function cadencePicker(mode,group=mode){
-  const choice=cadenceFor(mode), scope=group==='friend-dialog'?group:'lobby';
-  const selectedView=paceViews.get(scope)??(Cadences.more.some(([,ids])=>ids.includes(choice))?'more':'usual');
-  paceViews.set(scope,selectedView);
-  const option=id=>`<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" data-cadence-mode="${mode}" ${choice===id?'checked':''}><span>${Cadences.label(id)}</span></label>`;
-  const views=[['usual','Usuelles',Cadences.groups],['more','Plus de cadences',Cadences.more]];
-  const tabs=views.map(([id,title])=>`<button type="button" role="tab" id="tab-${group}-${id}" aria-controls="panel-${group}-${id}" aria-selected="${id===selectedView}" tabindex="${id===selectedView?0:-1}" data-pace-view="${id}">${title}</button>`).join('');
-  const panels=views.map(([id,,groups])=>`<div role="tabpanel" id="panel-${group}-${id}" aria-labelledby="tab-${group}-${id}" ${id===selectedView?'':'hidden'}>${groups.map(([title,ids])=>
-    `<div class="pace-group"><h3><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${paceSymbols[title]}</svg>${title}</h3><div>${ids.map(option).join('')}</div></div>`).join('')}</div>`).join('');
-  return `<fieldset class="pace-picker" data-pace-scope="${scope}"><legend>Cadence <small>${Cadences.label(choice)}</small></legend><div class="pace-tabs" role="tablist" aria-label="Choix de cadences">${tabs}</div>${panels}</fieldset>`;
+  const choice=cadenceFor(mode);
+  const option=id=>`<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" ${choice===id?'checked':''}><span>${Cadences.label(id)}</span></label>`;
+  const rows=Cadences.groups.map(([title,ids])=>`<div class="pace-group"><h3><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${paceSymbols[title]}</svg>${title}</h3><div>${ids.map(option).join('')}</div></div>`).join('');
+  const custom=choice!=='none' && !Cadences.groups.some(([,ids])=>ids.includes(choice));
+  return `<fieldset class="pace-picker" data-pace-mode="${mode}"><legend>Cadence <small>${Cadences.label(choice)}</small></legend>
+    <div class="pace-shortcuts">${option('none')}<button type="button" class="custom-pace" aria-haspopup="dialog" aria-pressed="${custom}">Personnalisée…</button></div>${rows}</fieldset>`;
 }
-function activatePaceView(tab){
-  const picker=tab.closest('.pace-picker');
-  paceViews.set(picker.dataset.paceScope,tab.dataset.paceView);
-  for(const button of picker.querySelectorAll('[role=tab]')){
-    const active=button===tab;
-    button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;
-    document.getElementById(button.getAttribute('aria-controls')).hidden=!active;
+function setPace(mode,id){
+  save('cadence-'+mode,id);
+  for(const picker of document.querySelectorAll(`.pace-picker[data-pace-mode="${mode}"]`)){
+    let matched=false;
+    for(const radio of picker.querySelectorAll('input[type=radio]')){
+      radio.checked=radio.value===id;
+      if(radio.checked)matched=true;
+    }
+    picker.querySelector('legend small').textContent=Cadences.label(id);
+    picker.querySelector('.custom-pace').setAttribute('aria-pressed',!matched);
   }
-  tab.focus({preventScroll:true});
+}
+function editPace(mode){
+  const choice=cadenceFor(mode);
+  const [minutes,increment]=(choice.includes('+')?choice:'10+0').split('+');
+  const dialog=document.createElement('dialog');
+  dialog.setAttribute('aria-labelledby','custom-pace-title');
+  dialog.innerHTML=`<h2 id="custom-pace-title">Cadence personnalisée</h2><form>
+    <label for="pace-minutes">Temps par joueur (minutes)</label><input id="pace-minutes" name="minutes" type="number" inputmode="numeric" min="1" max="${Cadences.maxMinutes}" step="1" value="${minutes}" required autofocus>
+    <label for="pace-increment">Ajout par coup (secondes)</label><input id="pace-increment" name="increment" type="number" inputmode="numeric" min="0" max="${Cadences.maxIncrement}" step="1" value="${increment}" required>
+    <div class="actions"><button type="button" class="btn">Annuler</button><button class="btn primary">Appliquer</button></div></form>`;
+  const dismiss=()=>dialog.close();
+  dialog.querySelector('[type=button]').onclick=dismiss;
+  dialog.querySelector('form').onsubmit=event=>{
+    event.preventDefault();
+    const fields=event.currentTarget.elements;
+    const id=fields.minutes.valueAsNumber+'+'+fields.increment.valueAsNumber;
+    if(Cadences.valid(id)){setPace(mode,id);dismiss()}
+  };
+  dialog.onclose=()=>{window.removeEventListener('hashchange',dismiss);dialog.remove()};
+  window.addEventListener('hashchange',dismiss);
+  document.body.append(dialog);dialog.showModal();
 }
 document.addEventListener('click',event=>{
-  const tab=event.target.closest('[data-pace-view]');
-  if(tab)activatePaceView(tab);
-});
-document.addEventListener('keydown',event=>{
-  const tab=event.target.closest('[data-pace-view]');
-  if(!tab || !['Home','End','ArrowLeft','ArrowRight'].includes(event.key))return;
-  event.preventDefault();
-  const tabs=[...tab.parentNode.children];
-  activatePaceView(event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs.find(t=>t!==tab));
+  const button=event.target.closest('.custom-pace');
+  if(button)editPace(button.closest('.pace-picker').dataset.paceMode);
 });
 document.addEventListener('change',event=>{
-  const input=event.target;
-  if(input.dataset.cadenceMode && Cadences.valid(input.value)){
-    save('cadence-'+input.dataset.cadenceMode,input.value);
-    input.closest('fieldset').querySelector('legend small').textContent=Cadences.label(input.value);
-  }
+  const input=event.target, picker=input.closest('.pace-picker');
+  if(picker && input.type==='radio' && Cadences.valid(input.value))setPace(picker.dataset.paceMode,input.value);
 });
 function friendOptions(){
   const friends=clubState.friends.filter(f=>f.accepted);

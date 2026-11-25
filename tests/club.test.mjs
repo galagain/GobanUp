@@ -80,20 +80,20 @@ test('comptes, invitations, reprise et recherche d’adversaire', async t => {
   assert.equal((await b('club')).rooms.find(g=>g.id===invite.id).resigned,2);
   await t.test('la cadence suit les invitations, les recherches et les pendules',async()=>{
     const queue=(fn,cadence)=>fn('rooms',{kind:'queue',n:13,cadence,ticket:crypto.randomUUID()});
-    const blitz=await queue(a,'3+2');
+    const blitz=await queue(a,'7+4');
     const rapid=await queue(b,'10+0');
     assert.notEqual(blitz.id,rapid.id);
     assert.equal(blitz.clock,null);
-    const paired=await queue(b,'3+2');
+    const paired=await queue(b,'7+4');
     assert.equal(paired.id,blitz.id);
-    assert.deepEqual(paired.clock.remaining,[180000,180000]);
+    assert.deepEqual(paired.clock.remaining,[420000,420000]);
     const path='rooms/'+blitz.id;
     const move=await a(path+'/move',{p:2,at:0,clock:{turn:0}});
     assert.equal(move.clock.turn,2);
-    assert.equal(move.clock.remaining[0],182000-(move.clock.since-paired.clock.since));
+    assert.equal(move.clock.remaining[0],424000-(move.clock.since-paired.clock.since));
     const store=new DatabaseSync(join(dir,'test.sqlite'));
     try{
-      store.prepare("UPDATE rooms SET clock=json_set(clock,'$.since',?) WHERE id=?").run(Date.now()-181000,blitz.id);
+      store.prepare("UPDATE rooms SET clock=json_set(clock,'$.since',?) WHERE id=?").run(Date.now()-421000,blitz.id);
     }finally{store.close()}
     assert.equal((await a(path)).timedOut,2);
     await b(path+'/move',{p:4,at:1},409);
@@ -111,7 +111,9 @@ test('comptes, invitations, reprise et recherche d’adversaire', async t => {
     await stop();await start();
     assert.deepEqual((await a(daily)).clock,completed.clock);
     assert.equal((await otherDevice(path)).timedOut,2);
-    await a('rooms',{kind:'invite',n:9,ticket:crypto.randomUUID(),cadence:'bogus'},400);
+    for(const cadence of ['bogus','07+4','0+1','7+-1','1441+0','7+3601',12]){
+      await a('rooms',{kind:'invite',n:9,ticket:crypto.randomUUID(),cadence},400);
+    }
   });
   await otherDevice('logout',{});
   await otherDevice('club',undefined,401);
