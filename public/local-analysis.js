@@ -55,14 +55,15 @@ const LocalAnalysis = (() => {
         worker.onmessageerror = badWorker;
         worker.onmessage = receive;
       }
-      const {states, moves, n} = current;
+      const {states, moves, n, first, komi, rules} = current;
+      const colorAt = i => (i+first-1)%2+1;
       const payload = {
         type:'katago:analyze', id:++serial, analysisGroup:'interactive',
         modelUrl, board:rows(states.at(-1), n), previousBoard:rows(states.at(-2), n),
-        previousPreviousBoard:rows(states.at(-3), n), currentPlayer:moves.length%2?'white':'black',
-        moveHistory:moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[i%2+1]})),
-        repetitionHistory:states.map((board,i)=>repetitionKey(board,i,n)),
-        komi:6.5, rules:'chinese', backend:'webgpu', visits:64, maxTimeMs:4500,
+        previousPreviousBoard:rows(states.at(-3), n), currentPlayer:colors[colorAt(moves.length)],
+        moveHistory:moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[colorAt(i)]})),
+        repetitionHistory:states.map((board,i)=>repetitionKey(board,i+first-1,n)),
+        komi, rules, backend:'webgpu', visits:64, maxTimeMs:4500,
         topK:3, analysisPvLen:7, ownershipMode:'none', wideRootNoise:0,
         reportDuringSearchEveryMs:600
       };
@@ -78,7 +79,7 @@ const LocalAnalysis = (() => {
     if (!a) return;
     ready = true;
     const {states,n,moves} = current;
-    const candidates = a.moves.filter(m=>m.visits>0 && (m.x===-1 || Go.play(states.at(-1),m.y*n+m.x,moves.length%2+1,n,states))).slice(0,3);
+    const candidates = a.moves.filter(m=>m.visits>0 && (m.x===-1 || Go.play(states.at(-1),m.y*n+m.x,(moves.length+current.first-1)%2+1,n,states))).slice(0,3);
     result = {win:a.rootWinRate, score:a.rootScoreLead, visits:a.rootVisits,
       candidates, backend:({webgpu:'WebGPU',wasm:'WebAssembly',cpu:'CPU'})[data.backend]||'local'};
     if (selected>=candidates.length) selected=0;
@@ -91,10 +92,11 @@ const LocalAnalysis = (() => {
   }
   function mount(g, index, allStates) {
     const moves = g.moves.slice(0,index);
-    const key = JSON.stringify([g.n,g.start||null,moves]);
+    const first=g.first||1, komi=g.komi??6.5, rules=g.rules||'chinese';
+    const key = JSON.stringify([g.n,g.start||null,first,komi,rules,moves]);
     if (current?.key===key) {render();return;}
     cancel();
-    current = {key, n:g.n, states:allStates.slice(0,index+1), moves,
+    current = {key, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
       finished:moves.length>=2 && moves.slice(-2).every(p=>p===-1)};
     selected=0;error='';result=cache.get(key)||null;
     render();

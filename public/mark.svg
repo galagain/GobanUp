@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
   <defs>
     <linearGradient id="board" x2="1" y2="1" gradientUnits="objectBoundingBox">
-      <stop stop-color="#497254"/><stop offset="1" stop-color="#31583e"/>
+      <stop stop-color="#9f9bfb"/><stop offset="1" stop-color="#625bc4"/>
     </linearGradient>
     <radialGradient id="stone" cx=".34" cy=".25" r=".83">
       <stop stop-color="#fffaf0"/><stop offset="1" stop-color="#e5ddcd"/>
@@ -9,7 +9,7 @@
   </defs>
   <rect width="48" height="48" rx="11.5" fill="url(#board)"/>
   <path d="M15.6 3.6v40.8M32.4 3.6v40.8M3.6 15.6h40.8M3.6 32.4h40.8"
-        fill="none" stroke="#eee9db" stroke-width="1.2" stroke-linecap="round"/>
+        fill="none" stroke="#e9e5ff" stroke-width="1.2" stroke-linecap="round"/>
   <circle cx="24" cy="24" r="8.5" fill="url(#stone)"/>
   <path d="M18.9 23.2a6 6 0 0 1 4.1-4.6" fill="none" stroke="#fffdf6" stroke-width="1.85" stroke-linecap="round"/>
 </svg>

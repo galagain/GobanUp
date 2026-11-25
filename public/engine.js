@@ -20,8 +20,8 @@ const Go = (() => {
     if(!group(next,p,n).liberties.size || previous?.some(b=>b.every((v,i)=>v===next[i])))return null;
     return {board:next,captured};
   }
-  function score(board,n) {
-    const points=[0,0,6.5],visited=new Set();
+  function score(board,n,komi=6.5) {
+    const points=[0,0,komi],visited=new Set();
     board.forEach((v,i)=>{
       if(v) {points[v]++;return}
       if(visited.has(i))return;
