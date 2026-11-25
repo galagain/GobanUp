@@ -205,6 +205,7 @@ function openReview(source,index){
   reviewSource=game=source;
   forkPosition=null;
   position=index;
+  MoveReview.begin(source);
   drawGame();
   LocalAnalysis.enable();
 }
@@ -249,7 +250,7 @@ async function resign(){
   }
 }
 async function route(){
-  LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
+  MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
   const hadBoard=!!$('#board-desk');
   const previousReview=reviewSource;
   activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
@@ -302,7 +303,7 @@ document.addEventListener('click',async e=>{
   if(button.dataset.size){boardSize=+button.dataset.size;save('board-size',boardSize);lobby();return}
   if(place!==undefined){setupBoard.start[+place]=brush;showSetup();return}
   if(button.dataset.brush!==undefined){brush=+button.dataset.brush;showSetup();return}
-  if(point!==undefined){if(reviewing)exploreLine([+point]);else if(game.mode==='online')await onlineMove(+point);else move(+point);return}
+  if(point!==undefined){if(reviewing){MoveReview.manual();exploreLine([+point])}else if(game.mode==='online')await onlineMove(+point);else move(+point);return}
   if(!action)return;
   const [a,id]=action.split(':');
   switch(a){
@@ -317,7 +318,7 @@ document.addEventListener('click',async e=>{
     case 'finish-setup':launch(setupBoard);break;
     case 'step':position=+id;drawGame();break;
     case 'review':location.hash='etude/'+id;break;
-    case 'original':returnToRecord();break;
+    case 'original':MoveReview.manual();returnToRecord();break;
     case 'branch':{
       const g={...newGame(game.n,'study',''),first:game.first,start:game.start,komi:game.komi,rules:game.rules,
         moves:game.moves.slice(0,position),title:'Variante · '+gameTitle(game).replace(/^Variante · /,'')};
@@ -325,7 +326,7 @@ document.addEventListener('click',async e=>{
     }
     case 'resign':popup('Abandonner la partie ?',`<p>Votre adversaire remportera la partie.</p><div class="actions">${btn('Continuer à jouer','close')}${btn('Confirmer l’abandon','confirm-resign')}</div>`);break;
     case 'confirm-resign':await resign();break;
-    case 'pass':if(reviewing)exploreLine([-1]);else if(game.mode==='online')await onlineMove(-1);else move(-1);break;
+    case 'pass':if(reviewing){MoveReview.manual();exploreLine([-1])}else if(game.mode==='online')await onlineMove(-1);else move(-1);break;
     case 'share':share();break;
     case 'copy':{
       const field=$('#url');field.select();try{await navigator.clipboard.writeText(field.value);toast('Lien copié.')}catch{toast('Le lien est sélectionné pour la copie.')}break;
@@ -336,7 +337,7 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('keydown',event=>{
   if(!reviewing||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;
-  if(event.key==='Escape'&&forkPosition!==null){returnToRecord();return}
+  if(event.key==='Escape'&&forkPosition!==null){MoveReview.manual();returnToRecord();return}
   const step={ArrowLeft:-1,ArrowRight:1}[event.key];
   if(step){event.preventDefault();position=Math.max(0,Math.min(game.moves.length,position+step));drawGame()}
 });

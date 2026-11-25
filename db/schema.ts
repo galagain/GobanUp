@@ -46,3 +46,24 @@ export const games = sqliteTable("rooms", {
   index("room_invites").on(t.recipient,t.white),
   uniqueIndex("pending_challenge").on(t.black,t.recipient).where(sql`${t.white} IS NULL AND ${t.recipient} IS NOT NULL`),
 ]);
+
+export const reviews = sqliteTable("reviews", {
+  id: text("id").primaryKey(),
+  scope: text("scope").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  record: text("record").notNull(),
+  total: integer("total").notNull(),
+  done: integer("done").notNull().default(0),
+  status: text("status").notNull().default("queued"),
+  attempts: integer("attempts").notNull().default(0),
+  owner: text("owner"),
+  leaseUntil: integer("lease_until").notNull().default(0),
+  requester: text("requester").notNull(),
+  created: integer("created").notNull(),
+}, t => [uniqueIndex("review_record").on(t.scope,t.fingerprint),index("review_queue").on(t.status,t.created),
+  index("review_requester").on(t.requester,t.created)]);
+export const reviewMoves = sqliteTable("review_moves", {
+  review: text("review").notNull().references(()=>reviews.id,{onDelete:"cascade"}),
+  ply: integer("ply").notNull(),
+  result: text("result").notNull(),
+}, t => [primaryKey({columns:[t.review,t.ply]})]);

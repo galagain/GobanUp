@@ -11,7 +11,7 @@ let displayedSetup = false;
 function boardShell(){
   if(!$('#board-desk')){
     main.innerHTML=`<section id="board-desk"><div class="desk-grid">
-      <div class="board-column"><div class="seat" id="white-seat"></div><div class="board-wrap"><div class="board" id="live-goban" role="group"></div></div><div class="seat" id="black-seat"></div></div>
+      <div class="board-column"><div class="seat" id="white-seat"></div><div class="board-wrap"><div class="board" id="live-goban" role="group"></div></div><div class="seat" id="black-seat"></div><div id="move-verdict" hidden></div></div>
       <aside class="desk-side" id="desk-tools"></aside></div></section>`;
   }
   return $('#desk-tools');
@@ -92,8 +92,9 @@ function drawGame(){
       ${gameNavigation(game,position)}
       <p class="study-label">${forkPosition===null?'Jouez sur le goban pour explorer une suite.':'Variante depuis le coup '+forkPosition+'.'}</p>
       <div class="actions review-tools">${btn('Passer','pass')}${forkPosition===null?'':btn('Retour à la position initiale','original')}</div>
-      <section id="local-analysis"></section><div class="actions secondary-actions">
+      <section id="game-review"></section><section id="local-analysis"></section><div class="actions secondary-actions">
       ${btn('Enregistrer la variante','branch','plus')}${btn('Bibliothèque','library','book')}</div></div>`;
+    MoveReview.render();
     LocalAnalysis.mount(game,position,states);
     if($('#slider'))$('#slider').oninput=e=>{position=+e.target.value;drawGame();$('#slider').focus()};
   }else{
@@ -101,7 +102,7 @@ function drawGame(){
     side.innerHTML=`<div class="panel-head">${icon(game.mode==='bot'?'bot':'stones')}<h2>${safe(gameTitle(game))}</h2></div><div class="side-content">
     ${info}<p class="move-number">${abandoned?resignationResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
     ${played?`<div class="played-moves" aria-label="Derniers coups">${played}</div>`:''}
-    <div class="actions">${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn('Analyser','review:'+game.id,'analysis')}</div>
+    <div class="actions">${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>
     <div class="side-foot">${!finished?btn('Abandonner','resign'):''}${btn('Nouvelle partie','home','plus')}</div></div>`;
   }
 }

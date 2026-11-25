@@ -148,7 +148,7 @@ const LocalAnalysis = (() => {
       const move=result?.candidates[Number(i)];
       if(!move)return;
       const points=readLine(move).map(step=>step.p);
-      if(points.length)exploreLine(points,Math.min(Number(ply),points.length));
+      if(points.length){MoveReview.manual();exploreLine(points,Math.min(Number(ply),points.length))}
     }
   }
   function picture(){

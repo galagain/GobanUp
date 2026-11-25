@@ -32,3 +32,4 @@ const Go = (() => {
   }
   return {group,play,score,adjacent};
 })();
+if (typeof module !== 'undefined' && module.exports) module.exports = Go;

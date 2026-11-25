@@ -26,6 +26,7 @@ async function club(request, env, path) {
   const token = request.headers.get('Cookie')?.match(/(?:^|;\s*)__Host-gobanup=([a-f0-9]{64})(?:;|$)/)?.[1];
   const digest = token ? await sessionDigest(token) : null;
   const user = digest ? await sql('SELECT u.id,u.name FROM sessions s JOIN users u ON s.user_id=u.id WHERE token=? AND expires>?',digest,now).first() : null;
+  if ((path==='/api/reviews' || path.startsWith('/api/reviews/')) && env.reviewApi) return env.reviewApi(request,user);
   if (path === '/api/me' && !post) return json({user});
   if (path === '/api/logout' && post) {
     if (digest) await sql('DELETE FROM sessions WHERE token=?',digest).run();
