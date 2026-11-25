@@ -66,7 +66,7 @@ function drawGame(){
   const finished=position>=2&&game.moves.slice(position-2,position).every(p=>p===-1);
   const canMove=!reviewing&&!finished&&(game.mode!=='bot'||color===1)&&(!['online','link'].includes(game.mode)||game.seat===color);
   paintBoard(b,game.n,game.moves[position-1],canMove?'point':'',color);
-  const black=game.mode==='bot'?name:game.black||'Noir',white=game.mode==='bot'?'Bot · '+(game.level==='easy'?'Découverte':'Tactique'):game.white||'Blanc';
+  const black=game.mode==='bot'?(account?.name||'Vous'):game.black||'Noir',white=game.mode==='bot'?'Bot · '+(game.level==='easy'?'Découverte':'Tactique'):game.white||'Blanc';
   seats(black,white,caps[position]);
   const who=color===1?'Noir':'Blanc';
   const status=finished?'Partie terminée':`${who} au trait`;

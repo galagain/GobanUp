@@ -5,13 +5,11 @@ function visible(row,player) {
   return {id:row.id,kind:row.kind,n:row.size,moves:JSON.parse(row.moves),seat:row.black===player?1:2,
     black:row.black_name,white:row.white_name,ready:!!row.white,revision:row.revision};
 }
-async function api(request,db,path) {
-  const secret=request.headers.get('Authorization')?.replace(/^Bearer /,'');
-  if(!uuid.test(secret||'')) return json({error:'Identité locale manquante.'},401);
-  const player=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(secret))),v=>v.toString(16).padStart(2,'0')).join('');
+async function api(request,db,path,user) {
+  const player=user.id;
   const stmt=(sql,...args)=>db.prepare(sql).bind(...args);
   const body=request.method==='POST'?await request.json():{};
-  const name=String(body.name||'Joueur').trim().slice(0,32)||'Joueur';
+  const name=user.name;
   const now=Date.now();
   if(path==='/api/rooms'&&request.method==='POST') {
     const {kind,n,ticket}=body;
@@ -26,11 +24,15 @@ async function api(request,db,path) {
     const results=await db.batch([...actions,create,find]);const row=results.at(-1).results[0];
     return row?json(visible(row,player)):json({error:'Relancez la recherche.'},409);
   }
-  const match=/^\/api\/rooms\/([a-f0-9-]+)(?:\/(join|move|cancel))?$/.exec(path);
+  const match=/^\/api\/rooms\/([a-f0-9-]+)(?:\/(join|move|cancel|decline))?$/.exec(path);
   if(!match||!uuid.test(match[1]))return json({error:'Salon introuvable.'},404);
   const [,id,action]=match;
+  if(action==='decline'&&request.method==='POST'){
+    const res=await stmt('DELETE FROM rooms WHERE id=? AND recipient=? AND white IS NULL',id,player).run();
+    return res.meta.changes?json({closed:true}):json({error:'Invitation indisponible.'},409);
+  }
   if(action==='join'&&request.method==='POST')
-    await stmt("UPDATE rooms SET white=?,white_name=?,touched=? WHERE id=? AND kind='invite' AND white IS NULL AND black<>?",player,name,now,id,player).run();
+    await stmt("UPDATE rooms SET white=?,white_name=?,touched=? WHERE id=? AND (kind='invite' OR (kind='friend' AND recipient=?)) AND white IS NULL AND black<>?",player,name,now,id,player,player).run();
   let row=await stmt('SELECT * FROM rooms WHERE id=?',id).first();
   if(!row)return json({error:'Ce salon a été fermé.'},404);
   if(row.black!==player&&row.white!==player)return json({error:'Ce salon est déjà occupé ou privé.'},403);
@@ -64,7 +66,7 @@ export default {
   async fetch(request,env) {
     const path=new URL(request.url).pathname;
     if(!path.startsWith('/api/'))return env.ASSETS.fetch(request);
-    try{return await api(request,env.DB,path)}
+    try{return await club(request,env,path)}
     catch(error){return json({error:error instanceof SyntaxError?'Requête incorrecte.':'Le salon est momentanément indisponible.'},error instanceof SyntaxError?400:503)}
   }
 };

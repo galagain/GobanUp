@@ -44,3 +44,8 @@ main{max-width:1560px;padding:clamp(22px,2.8vw,45px) clamp(20px,3vw,50px) 38px}
 
 .friends-actions{display:flex;justify-content:flex-end;margin-bottom:18px}
 .desk-side .record>span:nth-child(2){min-width:0;overflow-wrap:anywhere}
+
+.friends-actions{align-items:center;justify-content:space-between;gap:12px}.friends-actions h1{font-size:1.8rem;margin:0}
+.club-section{margin-block:22px}.club-section h2{font-size:1.15rem;margin:0 0 10px}.friend-name{flex:1;min-width:6rem}.friend-name strong,.friend-name small{display:block;overflow-wrap:anywhere}.friend-name small{color:var(--muted)}
+.club-actions{display:flex;gap:.5rem;flex-wrap:wrap}.friend-row{flex-wrap:wrap}.club-count{position:absolute;right:3px;top:2px;padding:1px 5px;border-radius:99px;background:var(--accent);color:#241f17;font-size:.75rem}
+#account-form small{display:block;margin-top:.45rem;color:var(--muted)}.profile{max-width:100%}.profile>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

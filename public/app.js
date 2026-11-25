@@ -6,7 +6,7 @@ const paths={home:'<path d="m3 10 9-7 9 7v10h-6v-6H9v6H3z"/>',play:'<path d="M4 
 const icon=(name,small=false)=>`<svg aria-hidden="true" class="${small?'small-icon':'ico'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]||''}</svg>`;
 const get=(k,f)=>{try{return JSON.parse(localStorage.getItem('gobanup.'+k))??f}catch{return f}};
 const save=(k,v)=>localStorage.setItem('gobanup.'+k,JSON.stringify(v));
-let games=get('games',[]),friends=get('friends',[]),name=get('name','Joueur'),game,position=0,reviewing=false,timer;
+let games=get('games',[]),name='Connexion',game,position=0,reviewing=false,timer;
 const main=$('#main'),modal=$('#modal');
 function toast(text){$('#toast').textContent=text;$('#toast').className='show';clearTimeout(timer);timer=setTimeout(()=>$('#toast').className='',3200)}
 function popup(title,body){modal.innerHTML=`<button type="button" class="close" aria-label="Fermer" data-action="close">${icon('close')}</button><h2>${title}</h2>${body}`;if(!modal.open)modal.showModal()}
@@ -30,11 +30,20 @@ const tabs = [
 ];
 function header(route){
   $('#nav').innerHTML = tabs.map(({key, label, picture}) => `<a href="#${key}" aria-label="${label}" title="${label}" ${key===route?'aria-current="page" class="active"':''}><svg class="tab-symbol" viewBox="0 0 24 24" aria-hidden="true">${picture}</svg><span>${label}</span></a>`).join('');
+  $('#profile').setAttribute('aria-label',account?'Mon compte · '+name:'Se connecter');
   $('#profile').innerHTML=`<span class="avatar">${safe(name.slice(0,1).toUpperCase())}</span><span>${safe(name)}</span>${icon('down',true)}`;
 }
 function btn(label,act,i='',primary=false){return `<button class="btn ${primary?'primary':''}" data-action="${act}">${i?icon(i):''}${label}</button>`}
 function newGame(n,mode,opponent){return {id:crypto.randomUUID(),n,mode,opponent,moves:[],date:Date.now()}}
-function saveGame(){games=[game,...games.filter(g=>g.id!==game.id)].slice(0,80);save('games',games)}
+function persistGames() {
+  const local=account?games.filter(g=>g.mode!=='online'):games;
+  save(historyKey(),local.slice(0,80));
+}
+function saveGame() {
+  games=[game,...games.filter(g=>g.id!==game.id)];
+  if(!account)games=games.slice(0,80);
+  if(game.mode!=='online')persistGames();
+}
 const demos=[{id:'opening',title:'Les premiers coups',n:19,moves:[60,300,72,288,244,270,41,319,110,249]},{id:'atari',title:'Comprendre l’atari',n:9,moves:[39,40,31,50,41,51,49]}];
 function gameTitle(g){return g.title||({bot:'Partie rapide',local:'Partie à deux',online:'Partie en ligne',link:'Partie par correspondance'}[g.mode]||'Étude libre')}
 const turnAt=(g,i)=>((g.first===2?1:0)+i)%2+1;
@@ -67,11 +76,11 @@ Object.assign(paths,{
 });
 const artTile=(iconName)=>`<span class="mode-art">${icon(iconName)}</span>`;
 function row(g,link){
-  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups</small></span>${icon('right',true)}</a>`;
+  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(g.mode==='online' ? ((g.seat===1?g.white:g.black) ? 'Contre '+(g.seat===1?g.white:g.black) : 'En attente d’un adversaire') : gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups</small></span>${icon('right',true)}</a>`;
 }
 
 let boardSize=[9,13,19].includes(get('board-size',19))?get('board-size',19):19;
-let incomingRoom=null,friendLaunch=false;
+let incomingRoom=null;
 const playMode=(title,detail,glyph,action,primary=false)=>`<button class="play-mode ${primary?'featured':''}" data-action="${action}">
   <span class="action-symbol">${icon(glyph)}</span><span><strong>${title}</strong><small>${detail}</small></span></button>`;
 function lobby(keepBoard=false){
@@ -89,11 +98,12 @@ function lobby(keepBoard=false){
 }
 async function startMode(mode){
   if(mode==='bot'){const g=newGame(boardSize,'bot','Ordinateur');g.level=get('bot-level','normal');launch(g);return}
+  if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);
   side.innerHTML=`<div class="panel-head">${icon(mode==='queue'?'globe':'friends')}<h2>${mode==='queue'?'Jouer en ligne':'Avec un ami'}</h2></div><div class="side-content"><p role="status">Connexion au salon…</p></div>`;
   try{
-    const r=await requestRoom('',{kind:mode,n:boardSize,ticket:crypto.randomUUID(),name});
+    const r=await requestRoom('',{kind:mode,n:boardSize,ticket:crypto.randomUUID()});
     if(routeVersion!==version){
       if(!r.ready)await requestRoom('/'+r.id+'/cancel',{}).catch(()=>{});
       return;
@@ -109,7 +119,7 @@ function waitingRoom(r){
   const link=location.href.split('#')[0]+'#rejoindre/'+r.id;
   side.innerHTML=`<div class="panel-head">${icon(r.kind==='queue'?'globe':'friends')}<h2>${r.kind==='queue'?'Recherche en ligne':'Invitation à jouer'}</h2></div><div class="side-content">
   <p class="waiting-status" role="status">${r.kind==='queue'?'En attente d’un adversaire…':'En attente de votre ami…'}</p>
-  <p>${r.kind==='queue'?'La partie commencera ici dès qu’un joueur vous rejoint.':'Transmettez ce lien à votre partenaire.'}</p>
+  <p>${r.kind==='queue'?'La partie commencera ici dès qu’un joueur vous rejoint.':r.kind==='friend'?'Votre ami peut accepter l’invitation dans l’onglet Amis.':'Transmettez ce lien à votre partenaire.'}</p>
   ${r.kind==='invite'?`<input id="url" aria-label="Lien d’invitation" readonly value="${safe(link)}">${btn('Copier le lien','copy','share',true)}`:''}<div class="side-foot">${btn('Annuler','cancel-room')}</div></div>`;
 }
 
@@ -127,24 +137,6 @@ function library(){
       game=importSgf(await file.text(),file.name);saveGame();location.hash='etude/'+game.id;
     }catch(err){popup('Import impossible',`<p>${safe(err.message)}</p>${btn('Choisir un autre fichier','import')}`)}
     e.target.value='';
-  };
-}
-function friendsPage(){
-  main.innerHTML=`<div class="friends-actions">${btn('Ajouter un ami','add','plus',true)}</div>`+
-  (friends.length?`<div class="panel">${friends.map((f,i)=>`<div class="friend-row"><span class="avatar">${safe(f.slice(0,1).toUpperCase())}</span><strong>${safe(f)}</strong>${btn('Inviter','challenge:'+i,'friends')}</div>`).join('')}</div>`:
-    `<div class="empty-panel">${artTile('friends')}<h2>Votre liste d’amis est vide</h2><p>Ajoutez un pseudo pour retrouver vos partenaires sur cet appareil.</p></div>`);
-}
-function identity(profile){
-  popup(profile?'Mon profil':'Ajouter un ami',`<form id="identity"><label for="nickname">${profile?'Votre pseudo':'Pseudo du partenaire'}</label><input id="nickname" required maxlength="32" value="${profile?safe(name):''}" autocomplete="off"><p class="error" role="status"></p><button class="btn primary">${profile?'Enregistrer':'Ajouter'}</button></form>`);
-  $('#identity').onsubmit=e=>{
-    e.preventDefault();const value=$('#nickname').value.trim();
-    if(!value)return;
-    if(profile){name=value;save('name',name);header($('#nav .active')?.hash.slice(1)||'jouer')}
-    else{
-      if(friends.some(f=>f.toLocaleLowerCase()===value.toLocaleLowerCase())){$('#identity .error').textContent='Ce pseudo figure déjà dans votre liste.';return}
-      friends.push(value);save('friends',friends);friendsPage();
-    }
-    modal.close();
   };
 }
 let setupBoard,brush=1;
@@ -168,10 +160,7 @@ function showSetup(){
 }
 let pollTimer,routeVersion=0,activeRoom,pendingMove=false;
 async function requestRoom(suffix,payload){
-  let key=get('session',null);if(!key){key=crypto.randomUUID();save('session',key)}
-  const res=await fetch('/api/rooms'+suffix,{method:payload?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:payload?JSON.stringify(payload):undefined});
-  if(!res.headers.get('content-type')?.includes('application/json'))throw Error('Le service de jeu en ligne est indisponible.');
-  const data=await res.json();if(!res.ok)throw Error(data.error||'Connexion interrompue.');return data;
+  return clubApi('rooms'+suffix,payload);
 }
 function enterRoom(r){incomingRoom=r;location.hash='salon/'+r.id}
 function roomView(r){
@@ -195,6 +184,9 @@ async function pollRoom(id,version){
     if(r.ready&&ended(r))return;
   }catch(err){
     if(version!==routeVersion)return;
+    if(err.status===404 || err.status===403){
+      games=games.filter(g=>g.id!==id); toast(err.message); location.replace('#nouvelle'); return;
+    }
     if(!$('#network-message'))main.insertAdjacentHTML('beforeend',`<p id="network-message" role="status">${safe(err.message)} ${btn('Retour','home')}</p>`);
   }
   if(version===routeVersion)pollTimer=setTimeout(()=>pollRoom(id,version),1800);
@@ -213,8 +205,10 @@ async function route(){
   const [key,id]=location.hash.slice(1).split('/');
   const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
   header(tab);
+  updateBadge();
   main.setAttribute('aria-label',tabs.find(t=>t.key===tab).label);
   if(key==='salon'){
+    if(!account){emptyStage(boardSize).innerHTML='<div class="side-content">'+btn('Se connecter','profile')+'</div>';return}
     const cached=incomingRoom?.id===id?incomingRoom:readGame(id);
     incomingRoom=null;
     if(cached)roomView(cached);
@@ -239,12 +233,11 @@ async function route(){
   else if(key==='position')openSetup();
   else {
     const current=hadBoard&&key==='jouer'&&displayedGame?readGame(displayedGame.id):null;
-    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length&&!friendLaunch){
+    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length){
       if(current.mode==='online'){location.replace('#salon/'+current.id);return}
       history.replaceState(null,'','#partie/'+current.id);
       game=current;position=current.moves.length;drawGame();
-    }else lobby(key==='jouer'&&hadBoard&&!friendLaunch);
-    if(friendLaunch){friendLaunch=false;startMode('invite')}
+    }else lobby(key==='jouer'&&hadBoard);
   }
   if(!hadBoard||!$('#board-desk'))window.scrollTo(0,0);
 }
@@ -261,9 +254,9 @@ document.addEventListener('click',async e=>{
     case 'close':modal.close();break;
     case 'new':case 'home':location.hash='nouvelle';break;
     case 'queue':case 'bot':await startMode(a);break;
-    case 'challenge':if(location.hash==='#amis'){friendLaunch=true;location.hash='jouer'}else await startMode('invite');break;
+    case 'challenge':await startMode('invite');break;
     case 'library':location.hash='bibliotheque';break;
-    case 'add':case 'profile':identity(a==='profile');break;
+    case 'add':case 'profile':case 'login':case 'register':case 'logout':case 'unfriend':case 'remove':case 'accept':case 'friend-game':case 'send-game':case 'accept-room':case 'decline-room':await clubAction(a,id);break;
     case 'import':modal.close();$('#sgf-input').click();break;
     case 'setup':location.hash='position';break;
     case 'finish-setup':autoAnalyze=setupBoard.id;launch(setupBoard);break;
@@ -277,9 +270,9 @@ document.addEventListener('click',async e=>{
     case 'copy':{
       const field=$('#url');field.select();try{await navigator.clipboard.writeText(field.value);toast('Lien copié.')}catch{toast('Le lien est sélectionné pour la copie.')}break;
     }
-    case 'cancel-room':try{await requestRoom('/'+activeRoom.id+'/cancel',{});games=games.filter(g=>g.id!==activeRoom.id);save('games',games);location.hash='jouer'}catch(err){toast(err.message)}break;
-    case 'join':try{enterRoom(await requestRoom('/'+location.hash.split('/')[1]+'/join',{name}))}catch(err){toast(err.message)}break;
+    case 'cancel-room':try{await requestRoom('/'+activeRoom.id+'/cancel',{});games=games.filter(g=>g.id!==activeRoom.id);persistGames();location.hash='nouvelle'}catch(err){toast(err.message)}break;
+    case 'join':if(!requireAccount(()=>document.querySelector('[data-action=join]')?.click()))return;try{enterRoom(await requestRoom('/'+location.hash.split('/')[1]+'/join',{name}))}catch(err){toast(err.message)}break;
   }
 });
-window.addEventListener('hashchange',route);route();
+window.addEventListener('hashchange',route);bootClub();
 

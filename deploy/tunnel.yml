@@ -1,0 +1,6 @@
+tunnel: 50cbfabb-6a5f-46b3-b011-1f60b864d9bb
+credentials-file: /etc/cloudflared/credentials.json
+ingress:
+  - hostname: gobanup.galagain.com
+    service: http://web:8093
+  - service: http_status:404
