@@ -3,11 +3,11 @@ const ReviewSummary=(()=>{
   const grades=['brilliant','best','good','inaccuracy','mistake','missed','blunder'];
   const format=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1});
   const percent=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
-  let metric='score',method=false,observer=null,inspected=null;
+  let metric='score',observer=null,inspected=null;
   function leave(){
     observer?.disconnect();observer=null;inspected=null;
   }
-  function reset(){leave();metric='score';method=false}
+  function reset(){leave();metric='score'}
 
   function countsTable(record,entries,badges){
     let names=[record.black||'Noir',record.white||'Blanc'];
@@ -32,7 +32,7 @@ const ReviewSummary=(()=>{
     return `<h2>Précision</h2><div class="player-stats">${cards}</div>
       <table class="summary-counts"><caption class="sr-only">Répartition des coups par joueur</caption><thead><tr><th scope="col">Qualité des coups</th><th scope="col">Noir</th><th scope="col">Blanc</th></tr></thead><tbody>
       ${grades.map(k=>`<tr class="summary-grade grade-${k}"><th scope="row"><span class="grade-key"></span>${badges[k][0]}</th>${players.map(p=>`<td class="${p.counts[k]?'':'zero'}">${p.counts[k]}</td>`).join('')}</tr>`).join('')}
-      </tbody></table><details class="accuracy-help" ${method?'open':''}><summary>Comment est calculée la précision ?</summary><p>La précision GobanUp est la moyenne des notes des coups évalués du joueur. Un coup sans perte vaut 100 %. Une perte de 6 points de go ou de 20 points de pourcentage de victoire divise la note par deux. Le calcul retient le plus grand de ces deux écarts relatifs.</p></details>`;
+      </tbody></table>`;
   }
 
   function momentsList(entries,badges,record){
@@ -61,6 +61,7 @@ const ReviewSummary=(()=>{
     const ref=panel.contains(focus)?focus?.dataset.focus:null;
     const total=record.moves.length,isWin=metric==='win',waiting=!entries.length;
     const values=waiting?[]:[blackValue(entries[0].best,entries[0].color),...entries.map(e=>blackValue(e.played,e.color))];
+    const turns=entries.filter(e=>e.turning);
     const extent=isWin?100:scoreRange(values);
     const tick=isWin?['100 %','50 %','0 %']:['+'+format.format(extent),'0','−'+format.format(extent)];
     panel.innerHTML=`<div class="report-chart-card"><section class="report-chart">
@@ -73,7 +74,7 @@ const ReviewSummary=(()=>{
       <div class="chart-readout"></div>
       <div class="report-progress"><span role="status">${safe(progress)}</span><span>${entries.length} / ${total} coups</span>
       ${retry?'<button data-grade="retry" class="text-btn">Réessayer</button>':''}</div>
-      </section>${momentsList(entries,badges,record)}</div>
+      </section>${momentsList(turns,badges,record)}</div>
       <section class="report-stats">${countsTable(record,entries,badges)}</section>`;
     const hit=panel.querySelector('.chart-hit'),svg=hit.querySelector('svg'),readout=panel.querySelector('.chart-readout');
     let w=0,h=0,active=inspected??selected;
@@ -94,7 +95,7 @@ const ReviewSummary=(()=>{
         const dot=marker.querySelector('circle');dot.style.display=v===undefined?'none':'';
         if(v!==undefined)dot.setAttribute('cy',y(v));
       }
-      readout.innerHTML=`<div><strong>${label}</strong><small>${entry?badges[entry.badge][0]:ply?'Coup à évaluer':'Avant le premier coup'}</small></div><b>${value}</b>`;
+      readout.innerHTML=`<div><strong>${label}</strong>${entry?.turning?'<small>'+badges[entry.badge][0]+'</small>':''}</div><b>${value}</b>`;
       hit.setAttribute('aria-valuenow',ply);hit.setAttribute('aria-valuetext',label+', '+value);
     }
     function draw(){
@@ -103,11 +104,7 @@ const ReviewSummary=(()=>{
       if(!w||!h)return;
       const points=values.map((v,i)=>x(i).toFixed(2)+' '+y(v).toFixed(2));
       const line='M'+points.join(' L');
-      const markers=entries.map((e,i)=>{
-        const important=['brilliant','missed','mistake','blunder'].includes(e.badge);
-        const radius=important?3.6:Math.min(2.4,Math.max(.9,(w-16)/total/3));
-        return `<circle class="plot-move grade-${e.badge}" cx="${x(i+1)}" cy="${y(values[i+1])}" r="${radius}"/>`;
-      });
+      const markers=turns.map(e=>`<circle class="plot-move grade-${e.badge}" cx="${x(e.ply)}" cy="${y(values[e.ply])}" r="3.8"/>`);
       svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
       svg.innerHTML=`<defs><linearGradient id="plot-wash" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#9ad4b2" stop-opacity=".29"/><stop offset="1" stop-color="#9ad4b2" stop-opacity=".015"/></linearGradient></defs>
         ${[0,.25,.5,.75,1].map(t=>`<path class="plot-grid ${t===.5?'equator':''}" d="M0 ${9+(h-18)*t}H${w}"/>`).join('')}
@@ -125,7 +122,6 @@ const ReviewSummary=(()=>{
       const dest={ArrowRight:active+1,ArrowUp:active+1,ArrowLeft:active-1,ArrowDown:active-1,Home:0,End:total}[e.key];
       if(dest!==undefined){e.preventDefault();inspected=Math.max(0,Math.min(total,dest));select(inspected);inspect(inspected)}
     };
-    panel.querySelector('.accuracy-help').ontoggle=e=>{if(e.target.isConnected)method=e.target.open};
     for(const button of panel.querySelectorAll('[data-metric]'))button.onclick=()=>{metric=button.dataset.metric;mount(props)};
     if(ref)panel.querySelector(`[data-focus="${ref}"]`)?.focus({preventScroll:true});
   }

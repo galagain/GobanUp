@@ -60,12 +60,7 @@ test('comptes, invitations, reprise et recherche d’adversaire', async t => {
   await otherDevice(room+'/move',{p:-1,at:2});
   await b(room+'/move',{p:-1,at:3});
   await a(room+'/move',{p:30,at:4},409);
-  const review=await a('reviews',{roomId:challenge.id});
-  assert.equal(review.total,4);
-  assert.equal((await b('reviews',{roomId:challenge.id})).id,review.id);
-  assert.equal((await b('reviews/'+review.id)).status,'queued');
-  const study=await a('reviews',{record:{n:9,moves:[40],first:2,komi:0.5,rules:'japanese'}});
-  await b('reviews/'+study.id,undefined,404);
+  await a('reviews',{roomId:challenge.id},410);
   const enqueue=fn=>fn('rooms',{kind:'queue',n:19,ticket:crypto.randomUUID()});
   const [first,second]=await Promise.all([enqueue(a),enqueue(b)]);
   assert.equal(first.id,second.id);

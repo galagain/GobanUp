@@ -1,5 +1,5 @@
 /* Report and reading room share their typography with the playing board. */
-main:has(.analysis-panel),main:has(.review-report){
+main:has(#board-desk){
   width:calc(100% - var(--rail-width));max-width:none;margin-left:var(--rail-width);
   padding:clamp(18px,2vw,34px);
   --sheet:#282925;--well:#21231f;--rule:#41433b;--soft:#b8b9ac;
@@ -16,7 +16,7 @@ main:has(.analysis-panel),main:has(.review-report){
 .report-heading p,.chart-heading p{color:var(--soft);margin-top:7px}
 .report-heading p{overflow-wrap:anywhere}.report-heading p span{padding:0 3px;color:#888c7e}
 .report-heading .primary{background:var(--gold);padding:12px 18px;white-space:nowrap;flex:none}
-#review-summary{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(290px,1fr);gap:clamp(14px,1.6vw,28px);align-items:start;font-variant-numeric:tabular-nums}
+#review-summary{display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(14px,1.6vw,28px);align-items:start;font-variant-numeric:tabular-nums}
 .report-chart-card,.report-stats,.analysis-panel{background:var(--sheet);border:1px solid var(--rule);border-radius:15px}
 .report-chart,.report-moments,.report-stats{padding:clamp(16px,1.9vw,32px)}
 .chart-heading{align-items:flex-start;flex-wrap:wrap}.chart-heading p{font-size:.86rem;margin-top:3px}
@@ -57,9 +57,8 @@ main:has(.analysis-panel),main:has(.review-report){
 .summary-counts thead th{font-size:.77rem;color:var(--soft);font-weight:550}.summary-counts th:first-child{text-align:left}
 .summary-counts tbody th{font-weight:500}.summary-counts .grade-key{margin-right:9px}
 .summary-counts td{font-weight:650}.summary-counts .zero{color:#9b9d92;font-weight:400}
-.accuracy-help{margin-top:15px;font-size:.78rem;color:var(--soft)}.accuracy-help summary{cursor:pointer}.accuracy-help p{margin-top:6px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.desk-grid:has(.analysis-panel){max-width:none;grid-template-columns:minmax(0,min(57%,calc(100svh - 128px))) minmax(0,1fr);align-items:start;gap:clamp(16px,2vw,34px)}
+#board-desk .desk-grid{max-width:none;grid-template-columns:minmax(0,min(57%,calc(100svh - 128px))) minmax(0,1fr);align-items:start;gap:clamp(16px,2vw,34px)}
 .desk-side:has(.analysis-panel){margin:0;max-width:none;max-height:none;overflow:visible;border:0;background:none}
 .analysis-panel{display:flex;flex-direction:column;height:calc(100svh - clamp(18px,2vw,34px) * 2);overflow:hidden}
 .analysis-head{padding:16px clamp(15px,1.65vw,28px);border-bottom:1px solid var(--rule)}
@@ -86,19 +85,17 @@ main:has(.analysis-panel),main:has(.review-report){
 .desk-grid:has(.analysis-panel) .board:has(.sequence-number) .last-stone{display:none}
 .analysis-panel button:focus-visible,.review-report button:focus-visible{outline-color:var(--mint)}
 @media(max-width:1050px){
-  #review-summary{grid-template-columns:minmax(0,1.2fr) minmax(260px,1fr)}
   .analysis-position{grid-template-columns:1fr}.analysis-position .review-nav{justify-content:space-between}
 }
 @media(max-width:830px){
-  #review-summary{grid-template-columns:minmax(0,1fr)}.report-chart-card,.report-stats{min-width:0}
-  .desk-grid:has(.analysis-panel){grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:12px}
+  #board-desk .desk-grid{grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:12px}
 }
 @media(max-width:690px){
-  .desk-grid:has(.analysis-panel){grid-template-columns:1fr}.analysis-panel{height:auto;min-height:0}.analysis-body{overflow:visible}
+  #board-desk .desk-grid{grid-template-columns:1fr}.analysis-panel{height:auto;min-height:0}.analysis-body{overflow:visible}
   .analysis-foot{order:0}.report-heading{flex-wrap:wrap;gap:16px}
 }
 @media(max-width:540px){
-  main:has(.analysis-panel),main:has(.review-report){width:100%;margin:0;padding:15px 3.5vw 25px}
+  main:has(#board-desk){width:100%;margin:0;padding:15px 3.5vw 25px}
   .report-heading{margin:16px 0 19px}.report-heading p{font-size:.85rem}
   .chart-hit{height:155px}.review-moments button{font-size:.83rem}
 }
@@ -111,3 +108,25 @@ main:has(.analysis-panel),main:has(.review-report){
 .position-estimate span{color:var(--soft);font-size:.76rem}.win-track{max-width:110px;height:4px;margin-top:8px;background:#50534a;border-radius:4px;overflow:hidden}
 .win-track i{display:block;height:100%;background:var(--mint)}
 #local-analysis h3{margin:13px 0 6px}.analysis-body .move-swing{font-size:.78rem;color:var(--soft)}
+
+#board-desk .desk-side{margin:0;max-width:none;height:calc(100svh - clamp(18px,2vw,34px) * 2);max-height:none;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#board-desk .analysis-panel{height:100%}
+#board-desk .desk-side:has(.analysis-panel){overflow:hidden}
+#board-desk .review-report{padding:clamp(12px,1.2vw,20px)}
+.review-report h1{font-size:clamp(1.6rem,2.4vw,2.55rem)}
+.review-report .report-heading{display:grid;gap:12px;margin:10px 0 16px}
+.review-report .report-heading .primary{justify-self:start;padding:8px 12px}
+.review-report .report-chart,.review-report .report-moments,.review-report .report-stats{padding:clamp(12px,1.3vw,21px)}
+.review-report .report-chart-card,.review-report .report-stats{border-radius:10px}
+.desk-side:has(.friends-actions){padding:16px}.desk-side .empty-panel{padding:20px}
+@media(max-width:690px){
+  body:has(#board-desk){height:100dvh;display:flex;flex-direction:column}
+  main:has(#board-desk){flex:1;min-height:0;padding-block:7px}
+  #board-desk,#board-desk .desk-grid{height:100%;min-height:0}
+  #board-desk .desk-grid{grid-template-rows:auto minmax(0,1fr);gap:6px}
+  #board-desk .board-column{width:min(100%,44dvh);justify-self:center}
+  #board-desk .seat{height:26px;padding:2px 0}
+  #board-desk .desk-side{min-height:0;height:100%}
+  #board-desk .desk-side:has(.analysis-panel){overflow:auto}
+  #board-desk .analysis-panel{height:auto;min-height:100%;overflow:visible}
+}

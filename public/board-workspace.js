@@ -61,27 +61,13 @@ function gameNavigation(g,index){
   <input id="slider" aria-label="Position dans la partie" type="range" min="0" max="${g.moves.length}" value="${index}">`;
 }
 function drawGame(){
-  if(reviewing && reviewOverview){
-    displayedGame={id:game.id,position};displayedSetup=false;
-    if(main.querySelector('.review-report')?.dataset.record!==game.id){
-      main.innerHTML=`<section class="review-report">
-        <button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>
-        <header class="report-heading"><div><h1 tabindex="-1">Bilan de partie</h1>
-          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div>
-          ${btn('Entrer dans l’analyse','explore-review','analysis',true)}</header>
-        <section id="review-summary" aria-label="Bilan de la partie"></section></section>`;
-      main.querySelector('.review-report').dataset.record=game.id;
-    }
-    MoveReview.render();
-    return;
-  }
   const analysis=reviewing||game.mode==='study', side=boardShell();
   displayedGame={id:game.id,position:forkPosition??position};displayedSetup=false;
   const {states,caps}=makeStates(game),b=states[position],color=turnAt(game,position);
   const abandoned=game.resigned && position===game.moves.length;
   const finished=twoPasses(game.moves,position)||abandoned;
   const canMove=!reviewing&&!finished&&(game.mode!=='bot'||color===1)&&(!['online','link'].includes(game.mode)||game.seat===color);
-  paintBoard(b,game.n,game.moves[position-1],analysis||canMove?'point':'',color);
+  paintBoard(b,game.n,game.moves[position-1],!reviewOverview&&(analysis||canMove)?'point':'',color);
   if(analysis && forkPosition!==null){
     const numbered=new Map();
     for(let i=forkPosition;i<position;i++){
@@ -97,6 +83,19 @@ function drawGame(){
   }
   const black=game.mode==='bot'?(account?.name||'Vous'):game.black||'Noir',white=game.mode==='bot'?'Bot · '+(game.level==='easy'?'Découverte':'Tactique'):game.white||'Blanc';
   seats(black,white,caps[position]);
+  if(reviewing && reviewOverview){
+    if(main.querySelector('.review-report')?.dataset.record!==game.id){
+      side.innerHTML=`<section class="review-report">
+        <button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>
+        <header class="report-heading"><div><h1 tabindex="-1">Bilan de partie</h1>
+          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div>
+          ${btn('Entrer dans l’analyse','explore-review','analysis',true)}</header>
+        <section id="review-summary" aria-label="Bilan de la partie"></section></section>`;
+      main.querySelector('.review-report').dataset.record=game.id;
+    }
+    MoveReview.render();
+    return;
+  }
   const who=color===1?'Noir':'Blanc';
   const status=finished&&!analysis?'Partie terminée':`${who} au trait`;
   const score=!analysis&&finished&&!abandoned?Go.score(b,game.n,game.komi):null;
@@ -109,7 +108,7 @@ function drawGame(){
       <div class="analysis-position">${info}${gameNavigation(game,position)}</div>
       <div class="analysis-body"><div id="move-verdict" hidden></div><section id="local-analysis"></section>
       <section id="game-review"></section></div><footer class="analysis-foot">
-      <p>${forkPosition===null?'Jouez sur le goban pour explorer une suite.':'Variante depuis le coup '+forkPosition+'.'}</p>
+      ${forkPosition===null?'':'<p>Variante depuis le coup '+forkPosition+'</p>'}
       <div class="actions">${btn('Passer','pass')}${forkPosition===null?'':btn('Revenir au coup '+forkPosition,'original','left')}
       ${btn('Enregistrer la variante','branch','plus')}${reviewSource?.moves.length?btn('Bibliothèque','library','book'):''}</div></footer></div>`;
     MoveReview.render();

@@ -94,8 +94,9 @@ function addFriend() {
   };
 }
 function friendsPage() {
+  const side=panelForCurrentBoard();
   if (!account) {
-    main.innerHTML=`<div class="empty-panel">${artTile('friends')}<h2>Jouer avec vos amis</h2>
+    side.innerHTML=`<div class="empty-panel">${artTile('friends')}<h2>Jouer avec vos amis</h2>
     <p>Connectez-vous pour ajouter vos partenaires et les inviter sur le goban.</p>${btn('Se connecter','profile','',true)} ${btn('Créer un compte','register')}</div>`;
     return;
   }
@@ -107,7 +108,7 @@ function friendsPage() {
   const outgoing=list.filter(f=>!f.accepted&&f.sender===account.id);
   const invites=clubState.rooms.filter(r=>r.invited);
   const accepted=list.filter(f=>f.accepted);
-  main.innerHTML=`<div class="friends-actions"><h1>Amis</h1>${btn('Ajouter un ami','add','plus',true)}</div>`+
+  side.innerHTML=`<div class="friends-actions"><h1>Amis</h1>${btn('Ajouter un ami','add','plus',true)}</div>`+
     section('Invitations à jouer',invites.map(r=>person(r.black,btn('Rejoindre','accept-room:'+r.id,'',true)+btn('Décliner','decline-room:'+r.id),r.n+' × '+r.n)))+
     section('Demandes reçues',incoming.map(f=>person(f.name,btn('Accepter','accept:'+f.id,'',true)+btn('Refuser','remove:'+f.id))))+
     section('Mes amis',accepted.map(f=>person(f.name,btn('Inviter à jouer','friend-game:'+f.id,'friends',true)+btn('Retirer','unfriend:'+f.id))))+

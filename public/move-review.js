@@ -5,40 +5,24 @@ const MoveReview=(()=>{
     mistake:['Erreur','?'],blunder:['Gaffe','??'],missed:['Occasion manquée','◇'],brilliant:['Brillant','!!']
   };
   const fmt=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1});
-  let generation=0,timer,job,record,entries=[],message='',replay=null;
+  let controller,record,entries=[],message='',replay=null;
   function stop(){
-    ReviewSummary.reset();generation++;clearTimeout(timer);record=null;job=null;entries=[];message='';replay=null;
+    ReviewSummary.reset();controller?.abort();record=null;entries=[];message='';replay=null;
     const caption=document.querySelector('#move-verdict');if(caption)caption.hidden=true;
   }
-  async function request(path,body){
-    let key=get('review-key',null);
-    if(!key){key=crypto.randomUUID();save('review-key',key)}
-    const response=await fetch('/api/reviews'+path,{method:body?'POST':'GET',cache:'no-store',
-      headers:{'Content-Type':'application/json','X-Review-Key':key},body:body?JSON.stringify(body):undefined});
-    const data=await response.json();
-    if(!response.ok)throw Error(data.error||'Revue indisponible.');
-    return data;
-  }
-  async function update(version,initial,retry=false){
-    try{
-      const payload=record.mode==='online'?{roomId:record.id,length:record.moves.length}:
-        {record:{n:record.n,first:record.first,rules:record.rules,komi:record.komi,start:record.start,moves:record.moves}};
-      const data=initial?await request('',{...payload,retry}):await request('/'+job.id+'?after='+entries.length);
-      if(version!==generation)return;
-      job=data;message='';for(const entry of data.entries)entries[entry.ply-1]=entry;
-      render();
-      if(entries.length<data.done || ['queued','running'].includes(data.status)){
-        timer=setTimeout(()=>update(version,false),entries.length<data.done?20:1800);
-      }
-    }catch(err){
-      if(version!==generation)return;
-      message=err.message;render();
-    }
-  }
-  function begin(source,retry=false){
+  async function begin(source){
     stop();
     if(!source.moves.length)return;
-    record=source;update(generation,true,retry);
+    record=source;
+    controller=new AbortController();
+    const {signal}=controller;
+    try{
+      const {reviewGame}=await import('./browser-review.js');
+      signal.throwIfAborted();
+      await reviewGame(source,account?.id||'guest',signal,results=>{entries=results;render()});
+    }catch(err){
+      if(!signal.aborted){message=err.message||'Calcul local interrompu.';render()}
+    }
   }
   function badge(e){
     const [label,symbol]=badges[e.badge];
@@ -56,11 +40,10 @@ const MoveReview=(()=>{
     game=reviewSource;forkPosition=null;replay=null;position=ply;drawGame();
   }
   function render(){
-    const progress=job?.status==='complete'?'Revue terminée':job?.status==='failed'?'Calcul interrompu':
-      message?'Revue interrompue':job?.status==='running'?'Analyse en cours':'En file d’attente';
-    const retry=Boolean(message||job?.status==='failed');
+    const progress=message||((record&&entries.length===record.moves.length)?'Revue terminée':'Analyse sur cet appareil');
+    const retry=Boolean(message);
     if(record&&reviewOverview&&$('#review-summary')){
-      ReviewSummary.mount({record,entries,badges,selected:position,select:ply=>{position=ply;displayedGame.position=ply},explore:ply=>switchReview(false,ply),progress:message||progress,retry});
+      ReviewSummary.mount({record,entries,badges,selected:position,select:ply=>{position=ply;drawGame()},explore:ply=>switchReview(false,ply),progress:message||progress,retry});
       return;
     }
     const panel=$('#game-review');if(!panel)return;
@@ -82,7 +65,7 @@ const MoveReview=(()=>{
     const button=event.target.closest('[data-grade]');
     if(!button||!record)return;
     const {grade,kind,ply}=button.dataset;
-    if(grade==='retry'){begin(record,true);render();return}
+    if(grade==='retry'){begin(record);render();return}
     const entry=entries[Number(ply)-1];if(!entry)return;
     if(grade==='jump'){if(reviewOverview)switchReview(false,entry.ply);else jump(entry.ply);return}
     game=reviewSource;forkPosition=null;replay=null;

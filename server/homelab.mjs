@@ -2,7 +2,6 @@ import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { createReadStream, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { reviewApi } from './reviews.mjs';
 import worker from '../dist/server/index.js';
 
 const db = new DatabaseSync(process.env.DATABASE || '/data/gobanup.sqlite');
@@ -67,7 +66,7 @@ const server = createServer(async (req,res) => {
       }
       const options={method:req.method,headers:req.headers};
       if (req.method==='POST') options.body=Buffer.concat(chunks);
-      const response=await worker.fetch(new Request(url,options),{DB,PASSWORD_ITERATIONS:600000,reviewApi:(request,user)=>reviewApi(db,request,user)});
+      const response=await worker.fetch(new Request(url,options),{DB,PASSWORD_ITERATIONS:600000});
       res.writeHead(response.status,Object.fromEntries(response.headers));
       res.end(Buffer.from(await response.arrayBuffer()));
       return;

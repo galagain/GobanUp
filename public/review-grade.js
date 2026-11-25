@@ -34,10 +34,22 @@ function candidate(info,g,history,ply,Go){
 }
 export function quality(same,loss,drop,bestWin){
   if(same)return 'best';
-  if(loss>=6 || (bestWin>=0.30 && bestWin<=0.70 && drop>=0.20))return 'blunder';
-  if(loss>=3 || drop>=0.15)return 'mistake';
-  if(loss>=1 || drop>=0.05)return 'inaccuracy';
+  const playedWin=bestWin-drop;
+  const leadLost=bestWin>=.55 && playedWin<=.45;
+  if(drop>=.20 && (leadLost || loss>=3))return 'blunder';
+  if((drop>=.12 && loss>=2) || (loss>=6 && drop>=.08))return 'mistake';
+  if(loss>=1 || drop>=.05)return 'inaccuracy';
   return 'good';
+}
+export function isTurningPoint(entry,previous){
+  if(Math.min(entry.best.visits,entry.played.visits,previous?.played.visits??Infinity)<12)return false;
+  const before=previous?(previous.color===entry.color?previous.played.win:1-previous.played.win):entry.best.win;
+  const after=entry.played.win;
+  const swing=Math.abs(before-after);
+  if(entry.badge==='brilliant')return after-before>=.12;
+  if(!['blunder','mistake','missed'].includes(entry.badge)||before<=after)return false;
+  const crossed=[.25,.45,.55,.75].some(bound=>before>=bound&&after<bound);
+  return entry.drop>=.08 && (swing>=.20 || (swing>=.10 && crossed));
 }
 function missedCapture(Go,g,ply,history,best,actual){
   const taken=best.steps[0].captured;
@@ -63,11 +75,11 @@ export async function evaluatePly({Go,g,ply,history,query}){
   const color=side(g,ply),p=g.moves[ply],played=coordinate(p,g.n);
   const ranked=async (visits,force)=> {
     const response=await query(visits,force);
-    return {moves:[...response.moveInfos].sort((a,b)=>a.order-b.order),human:response.humanPolicy};
+    return {moves:[...response.moveInfos].sort((a,b)=>a.order-b.order),policy:response.policy};
   };
-  let {moves,human}=await ranked(96);
+  let {moves,policy}=await ranked(96);
   let best=candidate(moves[0],g,history,ply,Go);
-  const probability=human?.[p];
+  const probability=policy?.[p];
   let brilliant=null;
   if(g.n===19 && best.move===p && p>=0 && Number.isFinite(probability) && probability>=0 && probability<0.02 && sacrifice(g,Go,best)){
     ({moves}=await ranked(384));
@@ -84,10 +96,14 @@ export async function evaluatePly({Go,g,ply,history,query}){
     actual=candidate(found,g,history,ply,Go);
     if(actual.move!==p)throw Error('Le moteur n’a pas évalué le coup joué');
   }
+  if(best.move!==p && best.win-actual.win>=.12 && Math.min(best.visits,actual.visits)<12){
+    if(best.visits<12)best=candidate((await ranked(128,best.coord)).moves[0],g,history,ply,Go);
+    if(actual.visits<12)actual=candidate((await ranked(128,played)).moves[0],g,history,ply,Go);
+  }
   const loss=Math.max(0,+(best.score-actual.score).toFixed(5)),drop=Math.max(0,+(best.win-actual.win).toFixed(6));
   let badge=quality(best.move===p,loss,drop,best.win);
   let explanation;
-  if(brilliant){badge='brilliant';explanation=brilliant+' Le modèle humain 5 kyū lui donne moins de 2 % de probabilité.'}
+  if(brilliant){badge='brilliant';explanation=brilliant}
   if(best.move!==p && loss>=1 && best.win>=0.5 && actual.win<0.5){
     const missed=missedCapture(Go,g,ply,history,best,actual);
     if(missed){badge='missed';explanation=missed}

@@ -4,7 +4,6 @@ const LocalAnalysis = (() => {
   const assets = new URL('katago/', document.baseURI);
   const modelUrl = new URL('g170-b6c96.bin.gz', assets).href;
   const cache = new Map();
-  const signed = new Intl.NumberFormat('fr-FR',{signDisplay:'exceptZero'});
   const colors = [null, 'black', 'white'];
   const number = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:1});
   const pointNumber = new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
@@ -34,6 +33,19 @@ const LocalAnalysis = (() => {
     }
     return key;
   }
+  function analysisPayload(g,states,moves){
+    const n=g.n;
+    return {
+      type:'katago:analyze',
+      modelUrl, board:rows(states.at(-1), n), previousBoard:rows(states.at(-2), n),
+      previousPreviousBoard:rows(states.at(-3), n), currentPlayer:colors[turnAt(g,moves.length)],
+      moveHistory:moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[turnAt(g,i)]})),
+      repetitionHistory:states.map((board,i)=>repetitionKey(board,i+(g.first||1)-1,n)),
+      komi:g.komi??6.5, rules:g.rules||'chinese', backend:'webgpu', visits:180, maxTimeMs:6500,
+      topK:3, analysisPvLen:10, ownershipMode:'none', wideRootNoise:0,
+      reportDuringSearchEveryMs:600
+    };
+  }
   function badWorker() {
     worker?.terminate();
     worker = null;
@@ -58,18 +70,7 @@ const LocalAnalysis = (() => {
         worker.onmessageerror = badWorker;
         worker.onmessage = receive;
       }
-      const {states, moves, n, first, komi, rules} = current;
-      const colorAt = i => (i+first-1)%2+1;
-      const payload = {
-        type:'katago:analyze', id:++serial, analysisGroup:'interactive',
-        modelUrl, board:rows(states.at(-1), n), previousBoard:rows(states.at(-2), n),
-        previousPreviousBoard:rows(states.at(-3), n), currentPlayer:colors[colorAt(moves.length)],
-        moveHistory:moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[colorAt(i)]})),
-        repetitionHistory:states.map((board,i)=>repetitionKey(board,i+first-1,n)),
-        komi, rules, backend:'webgpu', visits:180, maxTimeMs:6500,
-        topK:3, analysisPvLen:10, ownershipMode:'none', wideRootNoise:0,
-        reportDuringSearchEveryMs:600
-      };
+      const payload={...analysisPayload(current,current.states,current.moves),id:++serial,analysisGroup:'interactive'};
       running = true;
       worker.postMessage(payload);
       render();
@@ -99,7 +100,7 @@ const LocalAnalysis = (() => {
     const key=keyFor(moves);
     if (current?.key===key) {render();return;}
     cancel();
-    current = {key, parentKey:index?keyFor(moves.slice(0,-1)):null, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
+    current = {key, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
       finished:moves.length>=2 && moves.slice(-2).every(p=>p===-1)};
     error='';result=cache.get(key)||null;
     render();
@@ -132,8 +133,7 @@ const LocalAnalysis = (() => {
     return steps;
   }
   function lead(score){
-    const cp=Math.round(score*100);
-    return cp===0?'Égalité':`${cp>0?'Noir':'Blanc'} +${pointNumber.format(Math.abs(cp)/100)} pt`;
+    return Math.abs(score)<.005?'Égalité':`${score>0?'Noir':'Blanc'} +${pointNumber.format(Math.abs(score))} pt`;
   }
   const letters='ABC';
   function enable(){
@@ -179,16 +179,11 @@ const LocalAnalysis = (() => {
     ${detail?'<p class="tactic">'+detail+'</p>':''}<div class="pv-strip">${cells}</div></article>`;
   }
   function evaluation(){
-    const cp=Math.round(result.score*100);
-    const previous=cache.get(current.parentKey)?.score;
-    const color=turnAt(current,current.moves.length-1);
-    const swing=Number.isFinite(previous)?Math.round((result.score-previous)*100*(color===1?1:-1)):null;
     const percent=Math.max(0,Math.min(100,result.win*100));
     return `<div class="position-estimate"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong>
-      <span title="100 centipoints valent un point de go">${signed.format(cp)} cp pour Noir</span></div>
+      </div>
       <div><small>Victoire de Noir</small><strong>${number.format(percent)} %</strong>
-      <div class="win-track" aria-hidden="true"><i style="width:${percent}%"></i></div></div></div>
-      ${swing===null?'':`<p class="move-swing">Dernier coup · ${signed.format(swing)} cp pour ${color===1?'Noir':'Blanc'}</p>`}`;
+      <div class="win-track" aria-hidden="true"><i style="width:${percent}%"></i></div></div></div>`;
 
   }
   function render(){
@@ -200,8 +195,8 @@ const LocalAnalysis = (() => {
       content=`${evaluation()}<h3>Lignes du moteur</h3>${result.candidates.map(candidateRow).join('')}
       <small class="engine-detail">${result.visits} visites · ${result.backend}</small>`;
     }
-    const status=current.finished?'Deux passes. Jouez une pierre pour explorer une autre suite.':
-      error||(running||enabled&&!result?(ready?'Calcul en cours…':'Chargement du moteur…'):result?'':'Modèle local · 3,8 Mo au premier lancement.');
+    const status=current.finished?'Deux passes.':
+      error||(running||enabled&&!result?(ready?'Calcul en cours…':'Chargement du moteur…'):result?'':'');
     panel.innerHTML=`<div class="engine-title"><strong>KataGo</strong>${!current.finished&&enabled?'<button class="text-btn" data-kata="stop" aria-label="Désactiver le suivi de l’analyse">Désactiver</button>':''}</div>${content}
     <p class="kata-status" role="status">${status}</p>${!current.finished&&!enabled?`<button class="btn" data-kata="run">${error?'Réessayer':result?'Suivre les coups':'Analyser sur cet appareil'}</button>`:''}`;
   }
@@ -209,5 +204,5 @@ const LocalAnalysis = (() => {
     const button=event.target.closest('[data-kata]');
     if(button)control(button.dataset.kata);
   });
-  return {mount,detach,enable};
+  return {mount,detach,enable,analysisPayload};
 })();

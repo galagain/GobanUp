@@ -199,7 +199,7 @@ async function onlineMove(p){
   catch(err){if(version===routeVersion)toast(err.message)}
   finally{pendingMove=false}
 }
-let reviewSource=null, forkPosition=null, reviewOverview=false;
+let reviewSource=null, forkPosition=null, reviewOverview=false, lastReview=null;
 function setReviewView(overview,ply){
   ReviewSummary.leave();
   LocalAnalysis.detach();
@@ -274,10 +274,10 @@ async function route(){
     setReviewView(!!reviewSource.moves.length&&view!=='lignes',view==='lignes'?linePly(reviewSource):forkPosition??position);
     return;
   }
+  if(reviewing)lastReview={source:reviewSource,game,position,forkPosition,overview:reviewOverview,board:$('#live-goban')?.dataset.position};
   reviewOverview=false;
   MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
   const hadBoard=!!$('#board-desk')||!!$('.review-report');
-  const previousReview=reviewSource;
   activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
   const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
   header(tab);
@@ -301,11 +301,16 @@ async function route(){
       header('analyse');main.setAttribute('aria-label','Analyse');
       openReview(game,view==='lignes'?linePly(game):twoPasses(game.moves)?game.moves.length-2:game.moves.length,view==='lignes');
     }else{position=game.moves.length;drawGame()}
-  }else if(key==='amis'){displayedGame=null;displayedSetup=false;friendsPage()}
+  }else if(key==='amis'){friendsPage()}
+  else if(key==='analyse'&&lastReview&&displayedGame?.id===lastReview.source.id&&$('#live-goban')?.dataset.position===lastReview.board){
+    reviewing=true;reviewSource=lastReview.source;game=lastReview.game;
+    position=lastReview.position;forkPosition=lastReview.forkPosition;reviewOverview=lastReview.overview;
+    MoveReview.begin(reviewSource);drawGame();if(!reviewOverview)LocalAnalysis.enable();
+  }
   else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)&&readGame(displayedGame.id).ready!==false){
     const source=readGame(displayedGame.id);
     const index=displayedGame.position;
-    openReview(source,twoPasses(source.moves,index)?index-2:index);
+    openReview(source,index);
   }
   else if(key==='analyse'&&hadBoard&&displayedSetup)showSetup();
   else if(key==='analyse')openReview(newGame(boardSize,'study',''),0);
@@ -313,7 +318,7 @@ async function route(){
   else if(key==='position')openSetup();
   else {
     const current=hadBoard&&key==='jouer'&&displayedGame?readGame(displayedGame.id):null;
-    if(current&&current.mode!=='study'&&(displayedGame.position===current.moves.length||previousReview?.id===current.id)){
+    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length){
       if(current.mode==='online'){location.replace('#salon/'+current.id);return}
       history.replaceState(null,'','#partie/'+current.id);
       game=current;position=current.moves.length;drawGame();
