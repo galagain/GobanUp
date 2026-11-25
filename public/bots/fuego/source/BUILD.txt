@@ -1,0 +1,20 @@
+Fuego for GobanUp
+=================
+The GoUctPlayer and its playout policy come from Fuego, distributed under
+LGPL-3.0. This build runs its single search thread on a browser Worker.
+GobanUp uses Chinese rules, the game's komi, and caps search at 1000 games.
+
+Rebuild on Linux with Docker, curl, dpkg-deb, tar and patch. Download the
+files from this directory into one folder, then run there:
+
+mkdir -p src src/browser boost
+tar -xzf upstream.tar.gz -C src --strip-components=1
+patch -d src -p1 < single-thread.patch
+cp fuego.cpp CMakeLists.txt src/browser/
+curl -fL 'https://deb.debian.org/debian/pool/main/b/boost1.74/libboost1.74-dev_1.74.0+ds1-21_amd64.deb' -o boost.deb
+echo 'ba14fe04d7f138f874bd3ab3a20c4fd1e9f654e271449b8f3e48d20f942dbb93  boost.deb' | sha256sum -c -
+dpkg-deb -x boost.deb boost
+docker run --rm -v "$PWD/src:/src" -v "$PWD/boost/usr/include:/boost:ro" -w /src emscripten/emsdk@sha256:460fff8f8ac87e11b16447fbd66538a686eafa0e4fb977aa0989ed19fe2079f7 sh -c 'emcmake cmake -S browser -B browser/build -DCMAKE_BUILD_TYPE=Release && cmake --build browser/build -j4'
+
+The resulting browser/build/engine.js and browser/build/engine.wasm can be
+substituted for the files under bots/fuego/ on any copy of the site.

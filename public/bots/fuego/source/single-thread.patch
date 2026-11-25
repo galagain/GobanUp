@@ -1,0 +1,56 @@
+diff --git a/smartgame/SgUctSearch.cpp b/smartgame/SgUctSearch.cpp
+index 5f01d3a..9e8038d 100644
+--- a/smartgame/SgUctSearch.cpp
++++ b/smartgame/SgUctSearch.cpp
+@@ -158,44 +158,7 @@ SgUctSearch::Thread::Thread(SgUctSearch& search,
+-      m_threadReady(2, []() noexcept {}),
+-      m_playFinishedLock(m_playFinishedMutex),
+-      m_globalLock(search.m_globalMutex, std::defer_lock),
+-      m_thread(Function(*this))
+-{
+-    m_threadReady.arrive_and_wait();
+-}
+-
+-SgUctSearch::Thread::~Thread()
+-{
+-    m_quit = true;
+-    StartPlay();
+-    m_thread.join();
+-}
+-
+-void SgUctSearch::Thread::operator()()
+-{
+-    if (DEBUG_THREADS)
+-        SgDebug() << "SgUctSearch::Thread: starting thread "
+-                  << m_state->m_threadId << '\n';
+-    std::unique_lock lock(m_startPlayMutex);
+-    m_threadReady.arrive_and_wait();
+-    while (true)
+-    {
+-        m_startPlay.wait(lock);
+-        if (m_quit)
+-            break;
+-        m_search.SearchLoop(*m_state, &m_globalLock);
+-        Notify(m_playFinishedMutex, m_playFinished);
+-    }
+-    if (DEBUG_THREADS)
+-        SgDebug() << "SgUctSearch::Thread: finishing thread "
+-                  << m_state->m_threadId << '\n';
+-}
+-
+-void SgUctSearch::Thread::StartPlay()
+-{
+-    Notify(m_startPlayMutex, m_startPlay);
+-}
+-
+-void SgUctSearch::Thread::WaitPlayFinished()
+-{
+-    m_playFinished.wait(m_playFinishedLock);
+-}
++      m_threadReady(1, []() noexcept {}),
++      m_globalLock(search.m_globalMutex, std::defer_lock)
++{ }
++SgUctSearch::Thread::~Thread() = default;
++void SgUctSearch::Thread::operator()() { StartPlay(); }
++void SgUctSearch::Thread::StartPlay() { m_search.SearchLoop(*m_state, &m_globalLock); }
++void SgUctSearch::Thread::WaitPlayFinished() { }

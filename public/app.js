@@ -99,15 +99,29 @@ function lobby(keepBoard=false){
   const target=friend?friendOptions():'';
   const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
   side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options"><div class="size-pick" role="group" aria-label="Taille du goban"><span>Taille du goban</span><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></div>
-    ${bot?`<label for="level">Adversaire</label><select id="level">${BotPlayers.options()}</select><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
+    ${bot?`<label for="level">Adversaire</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
     </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
-  if(bot){$('#level').value=get('bot-level','normal');$('#level').onchange=e=>save('bot-level',e.target.value)}
+  if(bot){
+    const picker=side.querySelector('#level'),footer=side.querySelector('.play-submit'),hint=side.querySelector('#bot-download');
+    function showOpponent(){
+      const entry=OpponentCatalog.get(picker.value);
+      const remote=entry && !entry.engine;
+      const large=picker.value.startsWith('human-') || picker.value==='raylu';
+      hint.hidden=!large && !remote;
+      hint.textContent=remote?(['ogs-2143892','ogs-2122166','ogs-2123396'].includes(entry.key)?'Sur OGS · Goban 9 × 9 uniquement':'Taille et cadence à choisir sur OGS'):large?'Premier chargement du modèle · environ 99 Mo':'';
+      footer.innerHTML=remote?`<a class="btn primary" href="${entry.url}" target="_blank" rel="noopener">Voir ${safe(entry.name)} sur OGS ↗</a>`:btn(actionLabel,'bot','right',true);
+    }
+    picker.value=get('bot-level','normal');
+    if(!picker.value)picker.value='normal';
+    picker.onchange=()=>{save('bot-level',picker.value);showOpponent()};
+    showOpponent();
+  }
   if($('#opponent'))$('#opponent').onchange=e=>{selectedFriend=e.target.value;side.querySelector('[data-action="challenge"]').lastChild.textContent=selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'};
   const previous=games.filter(g=>g.mode!=='study'&&!ended(g));
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const g=newGame(boardSize,'bot','Ordinateur');g.level=get('bot-level','normal');g.cadence=cadenceFor(mode);g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
+  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.playable(level))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;g.cadence=cadenceFor(mode);g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);

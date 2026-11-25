@@ -101,3 +101,5 @@ dialog .pace-picker{margin-top:16px}
   .play-submit{padding-block:5px}.play-submit .primary{min-height:34px}
 }
 .play-options .bot-credits{grid-column:1/-1;justify-self:end;color:var(--muted);font-size:.76rem;text-decoration:underline}
+.play-options .bot-download{grid-column:1/-1;color:var(--muted);font-size:.78rem}
+.play-submit a.primary{text-align:center;text-decoration:none}

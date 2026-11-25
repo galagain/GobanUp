@@ -10,15 +10,23 @@ const BotPlayers=(()=>{
   };
   const groups=[
     ['GobanUp',[['easy','Découverte'],['normal','Tactique']]],
-    ['Moteurs',[['gnugo','GNU Go'],['katago','KataGo']]],
+    ['Moteurs',[['katago','KataGo']]],
     ['KaTrain · profils de niveau indicatif',ranks.map(rank=>['rank'+rank,'KaTrain · '+(rank<0?'2 dan':rank+' kyu')])],
     ['KaTrain · styles',Object.entries(styles).map(([id,style])=>[id,'KaTrain · '+style.name])]
   ];
   const names=new Map(groups.flatMap(([,options])=>options));
+  for(const [,entries] of OpponentCatalog.groups){
+    for(const entry of entries)if(entry.engine)names.set(entry.key,entry.name==='GnuGo'?'GNU Go':entry.name);
+  }
   const name=id=>names.get(id)||names.get('normal');
   const external=id=>names.has(id) && id!=='easy' && id!=='normal';
   function options(){
-    return groups.map(([label,items])=>`<optgroup label="${label}">${items.map(([id,text])=>`<option value="${id}">${text}</option>`).join('')}</optgroup>`).join('');
+    const catalogGroups=local=>OpponentCatalog.groups.map(([label,entries])=>[
+      (local?'Sur GobanUp':'Fiches OGS')+' · '+label,
+      entries.filter(entry=>Boolean(entry.engine)===local).map(entry=>[entry.key,(local?name(entry.key):entry.name)+' · '+entry.rank])
+    ]);
+    const all=[...catalogGroups(true),...groups,...catalogGroups(false)];
+    return all.map(([label,items])=>`<optgroup label="${label}">${items.map(([id,text])=>`<option value="${id}">${text}</option>`).join('')}</optgroup>`).join('');
   }
   function policy(logits,n,states){
     if(logits?.length!==n*n+1)throw Error('policy');
@@ -36,6 +44,23 @@ const BotPlayers=(()=>{
     for(const c of choices){c.prob=Math.exp(c.logit-max);sum+=c.prob}
     for(const c of choices)c.prob/=sum;
     return choices;
+  }
+  function sample(choices){
+    const total=choices.reduce((sum,c)=>sum+c.weight,0);
+    if(!(total>0) || !Number.isFinite(total))throw Error('empty policy');
+    let remaining=Math.random()*total;
+    for(const c of choices){remaining-=c.weight;if(remaining<0)return c.p}
+    return choices.at(-1).p;
+  }
+  function humanMove(probs,n,states){
+    if(probs?.length!==n*n+1)throw Error('human policy');
+    const board=states.at(-1),choices=[];
+    for(let p=0;p<probs.length;p++){
+      if(probs[p]>0 && (p===board.length || (!board[p] && Go.play(board,p,2,n,states)))){
+        choices.push({p:p===board.length?-1:p,weight:probs[p]});
+      }
+    }
+    return sample(choices);
   }
   // KaTrain 1.7.6 calibrated pick strategy (ai.py, MIT).
   function rankSample(rank,legal,area){
@@ -108,29 +133,35 @@ const BotPlayers=(()=>{
     pending=id;
     try{
       const gnu=g.level==='gnugo',search=g.level==='katago';
-      const url=gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
+      const fuego=g.level==='fuego',human=g.level.startsWith('human-'),raylu=g.level==='raylu';
+      const url=fuego?'bots/fuego-worker.js':gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
       worker??=new Worker(new URL(url,document.baseURI),{name:name(g.level)});
       worker.onerror=worker.onmessageerror=fail;
       worker.onmessage=({data})=>{
         if(!current() || data.id!==id)return;
         try{
           let move;
-          if(gnu){if(data.error)throw Error('GNU Go');move=data.move}
+          if(gnu || fuego){if(data.error)throw Error('engine');move=data.move}
           else{
             if(!data.ok)throw Error('KataGo');
-            if(search){
+            if(human){
+              if(data.type!=='katago:analyze_result')return;
+              move=humanMove(data.analysis.humanPolicy,g.n,states);
+            }else if(search){
               if(data.type!=='katago:analyze_result')return;
               const a=data.analysis;
               const candidate=a.moves.find(m=>m.x===-1 || Go.play(states.at(-1),m.y*g.n+m.x,2,g.n,states));
               move=candidate?(candidate.x===-1?-1:candidate.y*g.n+candidate.x):LocalAnalysis.policyMove(a.policy,states.at(-1),g.n,2,states);
             }else{
               if(data.type!=='katago:eval_result')return;
-              move=profileMove(g,states,data.eval.policyLogits);
+              const logits=data.eval.policyLogits;
+              move=raylu?sample(policy(logits,g.n,states).map(c=>({p:c.p,weight:c.prob**4}))):profileMove(g,states,logits);
             }
           }
+          if(!Number.isInteger(move) || move < -1 || move>=g.n*g.n)throw Error('invalid move');
           if(move!==-1 && !Go.play(states.at(-1),move,2,g.n,states)){
-            // GNU Go can suggest a repetition that GobanUp's positional superko forbids.
-            if(gnu && Number.isInteger(move) && move>=0 && move<g.n*g.n)move=-1;
+            // The compiled engines can suggest a repetition forbidden by positional superko.
+            if(gnu || fuego)move=-1;
             else throw Error('illegal');
           }
           clearTimeout(timer);pending=null;
@@ -138,18 +169,26 @@ const BotPlayers=(()=>{
           recordLocalMove(move);position=g.moves.length;saveGame();drawGame();
         }catch{fail()}
       };
-      timer=setTimeout(fail,90000);
-      if(gnu){
+      timer=setTimeout(fail,human || raylu?240000:90000);
+      if(fuego){worker.postMessage({id,n:g.n,komi:g.komi??6.5,moves:g.moves})}
+      else if(gnu){
         // GNU Go serializes its reply to SGF. Bound the record size even in long games.
         const start=Math.max(0,ply-65);
         worker.postMessage({id,n:g.n,komi:g.komi??6.5,board:states[start],moves:g.moves.slice(start)});
       }
       else{
         const input=LocalAnalysis.positionInputs(g,states)(ply);
+        if(human){
+          worker.postMessage({...input,id,type:'katago:analyze',analysisGroup:'opponent',visits:1,topK:1,analysisPvLen:1,
+            ownershipMode:'none',wideRootNoise:0,humanSlRootExploreProb:0,humanSlProfile:'rank_'+g.level.slice(6),
+            humanModelUrl:new URL('katago/human-v0.bin.gz',document.baseURI).href});
+          return;
+        }
+        if(raylu)input.modelUrl=new URL('katago/raylu-s9996604416.bin.gz',document.baseURI).href;
         worker.postMessage(search?{...input,id,type:'katago:analyze',analysisGroup:'opponent',visits:32,maxTimeMs:1800,topK:3,analysisPvLen:1,ownershipMode:'none',wideRootNoise:0}:
           {...input,id,type:'katago:eval',includePolicy:true});
       }
     }catch{fail()}
   }
-  return {name,options,external,run,stop,get failed(){return failed}};
+  return {name,options,external,playable:id=>names.has(id),run,stop,get failed(){return failed}};
 })();
