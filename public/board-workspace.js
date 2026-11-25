@@ -130,6 +130,7 @@ function drawGame(){
     ${played?`<div class="played-moves" aria-label="Derniers coups">${played}</div>`:''}
     <div class="actions">${engineTurn && BotPlayers.failed?btn('Réessayer','retry-bot'): ''}${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>
     <div class="side-foot">${!finished?btn('Abandonner','resign'):''}${btn('Nouvelle partie','home','plus')}</div></div>`;
+    MoveReview.prepare(game,states,engineTurn);
     if(engineTurn)BotPlayers.run(game);
     else if(finished)BotPlayers.stop();
   }

@@ -325,7 +325,7 @@ async function route(){
   }
   if(reviewing)lastReview={source:reviewSource,game,position,forkPosition,overview:reviewOverview,board:$('#live-goban')?.dataset.position};
   reviewOverview=false;
-  BotPlayers.stop();MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
+  MoveReview.stopPreparation();BotPlayers.stop();MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
   const hadBoard=!!$('#board-desk')||!!$('.review-report');
   activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
   const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
@@ -369,7 +369,9 @@ async function route(){
   else if(key==='position')openSetup();
   else {
     const current=hadBoard&&key==='jouer'&&displayedGame?readGame(displayedGame.id):null;
-    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length){
+    if(current && ended(current)){
+      lobby();
+    }else if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length){
       if(current.mode==='online'){location.replace('#salon/'+current.id);return}
       history.replaceState(null,'','#partie/'+current.id);
       game=current;position=current.moves.length;drawGame();

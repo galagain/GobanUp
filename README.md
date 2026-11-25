@@ -14,6 +14,6 @@ Dans **Amis**, créez un compte, puis envoyez une demande au pseudo de votre par
 
 ## Revue des coups
 
-**Revoir ma partie** lance KataGo dans un Web Worker du navigateur. Les estimations terminées sont conservées dans IndexedDB et réutilisées à la prochaine ouverture de la même partie sur cet appareil. Le serveur distribue les fichiers du moteur et du modèle.
+Pendant la partie, KataGo évalue les positions dans un Web Worker du navigateur. Entre les coups, il approfondit les positions déjà évaluées et conserve les variantes dans IndexedDB sur cet appareil. Le bot adverse a la priorité pendant son tour de calcul.
 
-Le bilan évalue la position initiale une fois, puis chaque coup avec un seul passage du réseau. Ce passage produit ensemble le score, les chances de victoire et les préférences de coups. La courbe et les notes utilisent la variation avant et après le coup joué. La recherche de variantes s’effectue dans l’onglet Analyse.
+**Revoir ma partie** utilise les recherches déjà effectuées avant et après chaque coup pour tracer la courbe et attribuer les notes. Quand l’une des deux recherches manque, le bilan compare les évaluations rapides. Chaque position manquante demande un seul passage du réseau. L’onglet Analyse affiche les variantes enregistrées et lance une recherche pour les nouvelles lignes explorées.

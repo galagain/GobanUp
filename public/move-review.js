@@ -6,22 +6,43 @@ const MoveReview=(()=>{
   };
   const fmt=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1});
   let controller,record,entries=[],message='',replay=null;
+  let preparation=null;
+  function stopPreparation(){
+    preparation?.engine?.stop();
+    preparation=null;
+  }
+  function prepare(game,states,botThinking){
+    const scope=account?.id||'guest';
+    if(!preparation || preparation.id!==game.id || preparation.scope!==scope){
+      stopPreparation();
+      const session=preparation={id:game.id,scope};
+      import('./browser-review.js').then(({createPreparation})=>{
+        if(preparation!==session)return;
+        session.engine=createPreparation(scope);
+        session.engine.update(session.game,session.states,session.botThinking);
+      }).catch(()=>{});
+    }
+    Object.assign(preparation,{game,states,botThinking});
+    preparation.engine?.update(game,states,botThinking);
+  }
+  window.addEventListener('pagehide',stopPreparation);
   function stop(){
-    ReviewSummary.reset();controller?.abort();record=null;entries=[];message='';replay=null;
+    ReviewSummary.reset();controller?.abort();LocalAnalysis.setPrepared(null);record=null;entries=[];message='';replay=null;
     const caption=document.querySelector('#move-verdict');if(caption)caption.hidden=true;
   }
   async function begin(source){
     stop();
     if(!source.moves.length)return;
     record=source;
+    LocalAnalysis.setPrepared(new Map(),true);
     controller=new AbortController();
     const {signal}=controller;
     try{
       const {reviewGame}=await import('./browser-review.js');
       signal.throwIfAborted();
-      await reviewGame(source,account?.id||'guest',signal,results=>{entries=results;render()});
+      await reviewGame(source,account?.id||'guest',signal,results=>{entries=results;render()},positions=>LocalAnalysis.setPrepared(positions));
     }catch(err){
-      if(!signal.aborted){message=err.message||'Calcul local interrompu.';render()}
+      if(!signal.aborted){LocalAnalysis.setPrepared(new Map());message=err.message||'Calcul local interrompu.';render()}
     }
   }
   function badge(e){
@@ -74,5 +95,5 @@ const MoveReview=(()=>{
     }
   });
   function manual(){replay=null}
-  return {begin,stop,render,manual};
+  return {begin,stop,render,manual,prepare,stopPreparation};
 })();

@@ -4,6 +4,8 @@ const LocalAnalysis = (() => {
   const assets = new URL('katago/', document.baseURI);
   const modelUrl = new URL('g170-b6c96.bin.gz', assets).href;
   const cache = new Map();
+  const searchSettings={visits:180,maxTimeMs:6500,topK:3,analysisPvLen:10,ownershipMode:'none',wideRootNoise:0};
+  let prepared=new Map(),waitingForCache=false;
   const colors = [null, 'black', 'white'];
   const number = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:1});
   const pointNumber = new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
@@ -54,9 +56,8 @@ const LocalAnalysis = (() => {
     render();
   }
   function start() {
-    if (!current || !enabled || current.finished || running) return;
-    if (cache.get(current.key)?.complete) {
-      result = cache.get(current.key);
+    if (!current || !enabled || current.finished || running || waitingForCache) return;
+    if (result?.complete) {
       render();
       return;
     }
@@ -69,7 +70,7 @@ const LocalAnalysis = (() => {
       }
       const inputs=positionInputs(current,current.states);
       const payload={...inputs(current.moves.length),type:'katago:analyze',id:++serial,analysisGroup:'interactive',
-        visits:180,maxTimeMs:6500,topK:3,analysisPvLen:10,ownershipMode:'none',wideRootNoise:0,reportDuringSearchEveryMs:600};
+        ...searchSettings,reportDuringSearchEveryMs:600};
       running = true;
       worker.postMessage(payload);
       render();
@@ -135,11 +136,20 @@ const LocalAnalysis = (() => {
     const key=positionKey(g,moves);
     if (current?.key===key) {render();return;}
     cancel();
-    current = {key, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
+    current = {key, first, komi, rules, start:g.start, n:g.n, states:allStates.slice(0,index+1), moves,
       finished:moves.length>=2 && moves.slice(-2).every(p=>p===-1)};
-    error='';result=cache.get(key)||null;
+    error='';result=prepared.get(key)||cache.get(key)||null;
     render();
     if (enabled && !result?.complete) timer=setTimeout(start,130);
+  }
+
+  function setPrepared(positions,waiting=false){
+    prepared=positions??new Map();
+    waitingForCache=waiting;
+    if(!positions || !current)return;
+    const saved=prepared.get(current.key);
+    if(saved){cancel();result=saved;render()}
+    if(enabled && !waiting && !result?.complete)start();
   }
 
   function pointFromText(text,n){
@@ -239,5 +249,5 @@ const LocalAnalysis = (() => {
     const button=event.target.closest('[data-kata]');
     if(button)control(button.dataset.kata);
   });
-  return {mount,detach,enable,positionInputs,positionKey,rawEstimate,rememberRaw,policyMove};
+  return {mount,detach,enable,setPrepared,searchSettings,snapshot,positionInputs,positionKey,rawEstimate,rememberRaw,policyMove};
 })();
