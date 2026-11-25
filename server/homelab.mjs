@@ -37,7 +37,7 @@ const DB = {
     } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
 };
-const types = {'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml','.wasm':'application/wasm','.txt':'text/plain'};
+const types = {'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml','.webp':'image/webp','.wasm':'application/wasm','.txt':'text/plain'};
 const files = new Map();
 function index(dir, prefix='') {
   for (const entry of readdirSync(dir,{withFileTypes:true})) {

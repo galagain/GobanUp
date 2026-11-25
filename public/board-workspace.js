@@ -125,7 +125,7 @@ function drawGame(){
   }else{
     const engineTurn=game.mode==='bot' && BotPlayers.external(game.level) && !finished && color===2;
     const played=game.moves.slice(-6).map((m,i)=>`<span><small>${game.moves.length-Math.min(6,game.moves.length)+i+1}.</small> ${coord(m,game.n)}</span>`).join('');
-    side.innerHTML=`<div class="panel-head">${icon(game.mode==='bot'?'bot':'stones')}<h2>${safe(gameTitle(game))}</h2></div><div class="side-content">
+    side.innerHTML=`<div class="panel-head">${game.mode==='bot'?BotPlayers.portrait(game.level):icon('stones')}<h2>${safe(gameTitle(game))}</h2></div><div class="side-content">
     ${info}${game.cadence?'<p class="room-settings">'+Cadences.label(game.cadence)+'</p>':''}<p class="move-number" role="status">${engineTurn?(BotPlayers.failed?'Le moteur local est indisponible.':BotPlayers.name(game.level)+' réfléchit…'):abandoned?finishResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
     ${played?`<div class="played-moves" aria-label="Derniers coups">${played}</div>`:''}
     <div class="actions">${engineTurn && BotPlayers.failed?btn('Réessayer','retry-bot'): ''}${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>

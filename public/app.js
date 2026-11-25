@@ -106,35 +106,48 @@ function lobby(keepBoard=false){
   const side=keepBoard?panelForCurrentBoard():emptyStage(boardSize);
   if(keepBoard) boardSize=displayedSetup?setupBoard.n:readGame(displayedGame?.id)?.n??boardSize;
   const bot=playTab==='bot', friend=playTab==='invite';
-  const target=friend?friendOptions():'';
-  const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
-  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options">${boardSizePicker()}
-    ${bot?`<label for="level">Niveau du bot</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
-    </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
+  const actionLabel=friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
   if(bot){
-    const picker=side.querySelector('#level'),footer=side.querySelector('.play-submit'),hint=side.querySelector('#bot-download');
-    function showOpponent(){
-      const level=picker.value;
-      const fits=BotPlayers.supportsSize(level,boardSize);
-      const large=level.startsWith('human-') || level==='raylu';
-      hint.textContent=!fits?'Choisissez la taille 19 × 19 pour jouer avec cet adversaire.':
-        level==='elf-v1'?'Premier chargement du modèle · environ 69 Mo':
-        large?'Premier chargement du modèle · environ 99 Mo':'';
-      hint.hidden=!hint.textContent;
-      footer.querySelector('button').disabled=!fits;
-    }
     const saved=get('bot-level','easy');
-    picker.value=saved==='ogs-625990'?'elf-v1':saved;
-    if(!picker.value)picker.value='easy';
-    picker.onchange=()=>{save('bot-level',picker.value);showOpponent()};
-    showOpponent();
+    const selected=saved==='ogs-625990'?'elf-v1':BotPlayers.supportsSize(saved,19)?saved:'easy';
+    side.innerHTML=playTabs()+`<div class="side-content play-config bot-list">${BotPlayers.cards(selected)}
+      <a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a></div>
+      <div class="play-submit bot-submit">${boardSizePicker()}<small class="bot-download" role="status"></small>
+      ${btn('Jouer contre '+BotPlayers.name(selected),'bot','right',true)}</div>`;
+    function selectBot(id){
+      const sizes=side.querySelectorAll('[data-size]');
+      for(const button of sizes)button.disabled=!BotPlayers.supportsSize(id,Number(button.dataset.size));
+      if(!BotPlayers.supportsSize(id,boardSize)){
+        boardSize=Number(Array.from(sizes).find(button=>!button.disabled).dataset.size);
+        if(!displayedGame && !displayedSetup)emptyStage(boardSize);
+      }
+      for(const button of sizes)button.setAttribute('aria-pressed',Number(button.dataset.size)===boardSize);
+      side.querySelector('[data-action="bot"]').lastChild.textContent='Jouer contre '+BotPlayers.name(id);
+      side.querySelector('.bot-download').textContent=id==='elf-v1'?'Premier chargement · 69 Mo':
+        id==='raylu'||id.startsWith('human-')?'Premier chargement · 99 Mo':'';
+    }
+    side.querySelector('.bot-list').onchange=event=>{
+      const id=event.target.value;
+      save('bot-level',id);selectBot(id);
+    };
+    selectBot(selected);
+  }else{
+    side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options">${boardSizePicker()}
+      ${friend?friendOptions():''}</div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
   }
   if($('#opponent'))$('#opponent').onchange=e=>{selectedFriend=e.target.value;side.querySelector('[data-action="challenge"]').lastChild.textContent=selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'};
   const previous=games.filter(g=>g.mode!=='study'&&!ended(g));
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','easy');if(!BotPlayers.supportsSize(level,boardSize))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;if(level==='elf-v1')g.komi=7.5;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
+  if(mode==='bot'){
+    const level=$('input[name="opponent-bot"]:checked')?.value;
+    if(!BotPlayers.supportsSize(level,boardSize))return;
+    const g=newGame(boardSize,'bot','Ordinateur');
+    g.level=level;
+    if(level==='elf-v1')g.komi=7.5;
+    launch(g);return;
+  }
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);
@@ -371,7 +384,15 @@ document.addEventListener('click',async e=>{
   const button=e.target.closest('button');if(!button)return;
   const {point,place,action}=button.dataset;
   if(button.dataset.playTab){playTab=button.dataset.playTab;lobby(true);document.querySelector('[data-play-tab="'+playTab+'"]').focus({preventScroll:true});return}
-  if(button.dataset.size){boardSize=+button.dataset.size;save('board-size',boardSize);lobby();return}
+  if(button.dataset.size){
+    if(button.disabled)return;
+    boardSize=Number(button.dataset.size);save('board-size',boardSize);
+    if(playTab==='bot'){
+      emptyStage(boardSize);
+      for(const size of document.querySelectorAll('[data-size]'))size.setAttribute('aria-pressed',size===button);
+    }else lobby();
+    return;
+  }
   if(place!==undefined){setupBoard.start[+place]=brush;showSetup();return}
   if(button.dataset.brush!==undefined){brush=+button.dataset.brush;showSetup();return}
   if(point!==undefined){if(reviewing){MoveReview.manual();exploreLine([+point])}else if(game.mode==='online')await onlineMove(+point);else move(+point);return}

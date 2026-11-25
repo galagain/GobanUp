@@ -7,7 +7,7 @@ const BotPlayers=(()=>{
     influence:{fraction:.3,count:5,line:10,endgame:.4,override:.95},
     weighted:{override:1}
   };
-  const opponents=new Map(OpponentCatalog.map(([id,name],index)=>[id,{name,level:index+1}]));
+  const opponents=new Map(OpponentCatalog.flatMap(([,bots])=>bots).map(([id,name,tile],index)=>[id,{name,tile,level:index+1}]));
   const name=id=>opponents.get(id)?.name||'Bot';
   const external=id=>opponents.has(id) && id!=='easy' && id!=='normal';
   const supportsSize=(id,n)=>opponents.has(id) && (id!=='elf-v1' || n===19);
@@ -15,11 +15,19 @@ const BotPlayers=(()=>{
     const bot=opponents.get(id);
     return bot?bot.name+' · Niveau '+bot.level:'Bot';
   }
-  function options(){
-    return Array.from(opponents,([id,bot])=>{
-      const size=id==='elf-v1'?' (19 × 19)':'';
-      return `<option value="${id}">Niveau ${bot.level} · ${bot.name}${size}</option>`;
-    }).join('');
+  function portrait(id){
+    const bot=opponents.get(id);
+    if(!bot)return '';
+    const column=bot.tile%6,row=Math.floor(bot.tile/6);
+    return `<span class="bot-portrait" aria-hidden="true" style="background-position:${column*20}% ${row*100/3}%"></span>`;
+  }
+  function cards(selected){
+    return OpponentCatalog.map(([category,bots])=>`<fieldset class="bot-category"><legend>${category}</legend><div class="bot-grid">${bots.map(([id,name])=>{
+      const {level}=opponents.get(id);
+      return `<label class="bot-card"><input type="radio" name="opponent-bot" value="${id}" ${selected===id?'checked':''}>
+        <span class="bot-card-face">${portrait(id)}
+        <span class="bot-identity"><strong>${name}</strong><small>Niveau ${level}</small></span></span></label>`;
+    }).join('')}</div></fieldset>`).join('');
   }
   function policy(logits,n,states){
     if(logits?.length!==n*n+1)throw Error('policy');
@@ -189,5 +197,5 @@ const BotPlayers=(()=>{
       }
     }catch{fail()}
   }
-  return {name,label,options,external,supportsSize,run,stop,get failed(){return failed}};
+  return {name,label,portrait,cards,external,supportsSize,run,stop,get failed(){return failed}};
 })();
