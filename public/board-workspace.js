@@ -85,12 +85,11 @@ function drawGame(){
   seats(black,white,caps[position]);
   if(reviewing && reviewOverview){
     if(main.querySelector('.review-report')?.dataset.record!==game.id){
-      side.innerHTML=`<section class="review-report">
-        <button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>
-        <header class="report-heading"><div><h1 tabindex="-1">Bilan de partie</h1>
-          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div>
-          ${btn('Entrer dans l’analyse','explore-review','analysis',true)}</header>
-        <section id="review-summary" aria-label="Bilan de la partie"></section></section>`;
+      side.innerHTML=`<section class="review-report"><div class="report-scroll">
+        <header class="report-heading"><button class="review-back" data-action="library" aria-label="Bibliothèque">${icon('left',true)}<span>Bibliothèque</span></button><div><h1 tabindex="-1">Bilan de partie</h1>
+          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div></header>
+        <section id="review-summary" aria-label="Bilan de la partie"></section></div>
+        <footer class="report-foot">${btn('Entrer dans l’analyse','explore-review','right',true)}</footer></section>`;
       main.querySelector('.review-report').dataset.record=game.id;
     }
     MoveReview.render();
