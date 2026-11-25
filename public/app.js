@@ -110,9 +110,8 @@ function lobby(keepBoard=false){
   if(bot){
     const saved=get('bot-level','easy');
     const selected=saved==='ogs-625990'?'elf-v1':BotPlayers.supportsSize(saved,19)?saved:'easy';
-    side.innerHTML=playTabs()+`<div class="side-content play-config bot-list">${BotPlayers.cards(selected)}
-      <a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a></div>
-      <div class="play-submit bot-submit">${boardSizePicker()}<small class="bot-download" role="status"></small>
+    side.innerHTML=playTabs()+`<div class="side-content play-config bot-list">${BotPlayers.cards(selected)}</div>
+      <div class="play-submit bot-submit">${boardSizePicker()}
       ${btn('Jouer contre '+BotPlayers.name(selected),'bot','right',true)}</div>`;
     function selectBot(id){
       const sizes=side.querySelectorAll('[data-size]');
@@ -123,8 +122,6 @@ function lobby(keepBoard=false){
       }
       for(const button of sizes)button.setAttribute('aria-pressed',Number(button.dataset.size)===boardSize);
       side.querySelector('[data-action="bot"]').lastChild.textContent='Jouer contre '+BotPlayers.name(id);
-      side.querySelector('.bot-download').textContent=id==='elf-v1'?'Premier chargement · 69 Mo':
-        id==='raylu'||id.startsWith('human-')?'Premier chargement · 99 Mo':'';
     }
     side.querySelector('.bot-list').onchange=event=>{
       const id=event.target.value;

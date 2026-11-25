@@ -110,7 +110,6 @@ dialog .pace-picker{margin-top:18px}
 .format-choice[aria-pressed=true] .format-face::after,.format-choice input:checked+.format-face::after{content:'';position:absolute;top:7px;right:7px;width:4px;height:8px;border:solid var(--wood-light);border-width:0 2px 2px 0;transform:rotate(45deg)}
 .format-choice input:focus-visible+.format-face{outline:2px solid var(--wood-light);outline-offset:2px}
 .play-options select{margin:0;min-width:0;padding:6px 8px;font-size:.83rem}
-.bot-list .bot-credits{display:inline-block;margin-top:16px;color:var(--muted);font-size:.74rem;text-decoration:underline}
 .bot-category{min-width:0;margin:0;padding:0;border:0}
 .bot-category+.bot-category{margin-top:18px}
 .bot-category legend{display:flex;align-items:center;gap:10px;width:100%;margin-bottom:7px;padding:0;font-size:.98rem;font-weight:650}
@@ -134,8 +133,6 @@ dialog .pace-picker{margin-top:18px}
 .bot-submit .format-face svg{width:19px;height:19px}
 .bot-submit .format-face::after{display:none}
 .bot-submit .format-choice:disabled{opacity:.35;cursor:not-allowed}
-.bot-submit .bot-download{display:block;text-align:right;color:var(--muted);font-size:.73rem}
-.bot-submit .bot-download:empty{display:none}
 .bot-submit .primary{margin-top:7px}
 .play-submit{flex:none;padding:10px clamp(12px,1.4vw,22px) 12px;background:#262522;border-top:1px solid #423e36}
 .play-submit .primary{width:100%;display:flex;flex-direction:row-reverse;justify-content:center;min-height:44px;border-radius:7px;font-weight:670}
