@@ -45,7 +45,7 @@ function saveGame() {
   if(game.mode!=='online')persistGames();
 }
 const demos=[{id:'opening',title:'Les premiers coups',n:19,moves:[60,300,72,288,244,270,41,319,110,249]},{id:'atari',title:'Comprendre l’atari',n:9,moves:[39,40,31,50,41,51,49]}];
-function gameTitle(g){return g.title||({bot:'Partie contre '+BotPlayers.name(g.level),local:'Partie à deux',online:'Partie en ligne',link:'Partie par correspondance'}[g.mode]||'Étude libre')}
+function gameTitle(g){return g.title||({bot:'Partie contre '+BotPlayers.label(g.level),local:'Partie à deux',online:'Partie en ligne',link:'Partie par correspondance'}[g.mode]||'Étude libre')}
 const turnAt=(g,i)=>((g.first===2?1:0)+i)%2+1;
 function makeStates(g){let board=g.start?g.start.slice():Array(g.n*g.n).fill(0);const states=[board],caps=[[0,0]];for(let i=0;i<g.moves.length;i++){let cap=caps[i].slice();if(g.moves[i]!==-1){const r=Go.play(board,g.moves[i],turnAt(g,i),g.n,states);if(!r)throw Error('Coup incorrect');board=r.board;cap[turnAt(g,i)-1]+=r.captured}states.push(board);caps.push(cap)}return {states,caps}}
 const twoPasses=(moves,index=moves.length)=>index>=2 && moves[index-1]===-1 && moves[index-2]===-1;
@@ -109,7 +109,7 @@ function lobby(keepBoard=false){
   const target=friend?friendOptions():'';
   const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
   side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options">${boardSizePicker()}
-    ${bot?`<label for="level">Adversaire</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
+    ${bot?`<label for="level">Niveau du bot</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
     </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
   if(bot){
     const picker=side.querySelector('#level'),footer=side.querySelector('.play-submit'),hint=side.querySelector('#bot-download');
@@ -123,9 +123,9 @@ function lobby(keepBoard=false){
       hint.hidden=!hint.textContent;
       footer.querySelector('button').disabled=!fits;
     }
-    const saved=get('bot-level','normal');
+    const saved=get('bot-level','easy');
     picker.value=saved==='ogs-625990'?'elf-v1':saved;
-    if(!picker.value)picker.value='normal';
+    if(!picker.value)picker.value='easy';
     picker.onchange=()=>{save('bot-level',picker.value);showOpponent()};
     showOpponent();
   }
@@ -134,7 +134,7 @@ function lobby(keepBoard=false){
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.supportsSize(level,boardSize))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;if(level==='elf-v1')g.komi=7.5;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
+  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','easy');if(!BotPlayers.supportsSize(level,boardSize))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;if(level==='elf-v1')g.komi=7.5;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);

@@ -1,32 +1,25 @@
 'use strict';
 const BotPlayers=(()=>{
-  const ranks=[18,14,10,6,2,-1];
   const styles={
-    local:{name:'Local',fraction:0,count:15,deviation:1.5,endgame:.5,override:.95},
-    tenuki:{name:'Tenuki',fraction:.4,count:5,deviation:7.5,endgame:.45,override:.85},
-    territory:{name:'Territoire',fraction:.3,count:5,line:2,endgame:.4,override:.95},
-    influence:{name:'Influence',fraction:.3,count:5,line:10,endgame:.4,override:.95},
-    weighted:{name:'Pondéré',override:1}
+    local:{fraction:0,count:15,deviation:1.5,endgame:.5,override:.95},
+    tenuki:{fraction:.4,count:5,deviation:7.5,endgame:.45,override:.85},
+    territory:{fraction:.3,count:5,line:2,endgame:.4,override:.95},
+    influence:{fraction:.3,count:5,line:10,endgame:.4,override:.95},
+    weighted:{override:1}
   };
-  const groups=[
-    ['GobanUp',[['easy','Découverte'],['normal','Tactique']]],
-    ['Moteurs',[['katago','KataGo']]],
-    ['KaTrain · profils de niveau indicatif',ranks.map(rank=>['rank'+rank,'KaTrain · '+(rank<0?'2 dan':rank+' kyu')])],
-    ['KaTrain · styles',Object.entries(styles).map(([id,style])=>[id,'KaTrain · '+style.name])]
-  ];
-  const names=new Map(groups.flatMap(([,options])=>options));
-  for(const [,entries] of OpponentCatalog){
-    for(const [id,label] of entries)names.set(id,label);
+  const opponents=new Map(OpponentCatalog.map(([id,name],index)=>[id,{name,level:index+1}]));
+  const name=id=>opponents.get(id)?.name||'Bot';
+  const external=id=>opponents.has(id) && id!=='easy' && id!=='normal';
+  const supportsSize=(id,n)=>opponents.has(id) && (id!=='elf-v1' || n===19);
+  function label(id){
+    const bot=opponents.get(id);
+    return bot?bot.name+' · Niveau '+bot.level:'Bot';
   }
-  const name=id=>names.get(id)||names.get('normal');
-  const external=id=>names.has(id) && id!=='easy' && id!=='normal';
-  const supportsSize=(id,n)=>names.has(id) && (id!=='elf-v1' || n===19);
   function options(){
-    const opponents=OpponentCatalog.map(([label,entries])=>[
-      label,entries.map(([id,label,rank])=>[id,label+' · '+rank])
-    ]);
-    const all=[...opponents,...groups];
-    return all.map(([label,items])=>`<optgroup label="${label}">${items.map(([id,text])=>`<option value="${id}">${text}</option>`).join('')}</optgroup>`).join('');
+    return Array.from(opponents,([id,bot])=>{
+      const size=id==='elf-v1'?' (19 × 19)':'';
+      return `<option value="${id}">Niveau ${bot.level} · ${bot.name}${size}</option>`;
+    }).join('');
   }
   function policy(logits,n,states){
     if(logits?.length!==n*n+1)throw Error('policy');
@@ -196,5 +189,5 @@ const BotPlayers=(()=>{
       }
     }catch{fail()}
   }
-  return {name,options,external,supportsSize,run,stop,get failed(){return failed}};
+  return {name,label,options,external,supportsSize,run,stop,get failed(){return failed}};
 })();

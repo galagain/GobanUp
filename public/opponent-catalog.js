@@ -1,16 +1,27 @@
 'use strict';
-// Published OGS ranks are indicative. Each entry has a local implementation.
+// Initial difficulty order, based on profile ranks, KaTrain estimates and local search limits.
+// Engine IDs are also stored in game records and user preferences.
 const OpponentCatalog=[
-  ['Débutant', [['human-15k','15k-kgs-humanlike-kata','21k']]],
-  ['Moyen', [
-    ['human-10k','10k-kgs-humanlike-kata','16k'],
-    ['gnugo','GNU Go','13k'],
-    ['human-5k','5k-kgs-humanlike-kata','8k']
-  ]],
-  ['Avancé', [
-    ['fuego','Fuego','5k'],
-    ['raylu','raylubot','1k'],
-    ['human-1d','1d-kgs-humanlike-kata','1k'],
-    ['elf-v1','20bTurboLz-Elf-v1','3d · 19 × 19']
-  ]]
+  ['easy',      'Mica'],
+  ['normal',    'Piko'],
+  ['human-15k', 'Noma'],
+  ['rank18',    'Lilo'],
+  ['human-10k', 'Sumi'],
+  ['rank14',    'Tavi'],
+  ['gnugo',     'Nagi'],
+  ['rank10',    'Riku'],
+  ['human-5k',  'Yuna'],
+  ['rank6',     'Kumo'],
+  ['fuego',     'Sora'],
+  ['tenuki',    'Haku'],
+  ['local',     'Nori'],
+  ['territory', 'Aki'],
+  ['rank2',     'Kaï'],
+  ['influence', 'Yori'],
+  ['weighted',  'Maki'],
+  ['human-1d',  'Sayo'],
+  ['raylu',     'Tora'],
+  ['rank-1',    'Arko'],
+  ['elf-v1',    'Raïko'],
+  ['katago',    'Tenro']
 ];
