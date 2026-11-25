@@ -98,7 +98,7 @@ function lobby(keepBoard=false){
   const bot=playTab==='bot', friend=playTab==='invite';
   const target=friend?friendOptions():'';
   const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
-  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options"><div class="size-pick" role="group" aria-label="Taille du goban"><span>Taille du goban</span><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></div>
+  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options"><div class="size-pick" role="group" aria-label="Taille du goban"><span>Taille du goban</span><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${boardSizeMark(n)}${n} × ${n}</button>`).join('')}</div></div>
     ${bot?`<label for="level">Adversaire</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
     </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
   if(bot){
