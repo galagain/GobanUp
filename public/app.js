@@ -121,13 +121,13 @@ function lobby(keepBoard=false){
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.playable(level))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;g.cadence=cadenceFor(mode);g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
+  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.playable(level))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);
   side.innerHTML=`<div class="panel-head">${icon(mode==='queue'?'globe':'friends')}<h2>${mode==='queue'?'Jouer en ligne':'Avec un ami'}</h2></div><div class="side-content"><p role="status">Connexion au salon…</p></div>`;
   try{
-    const cadence=cadenceFor(mode);
+    const cadence=selectedCadence();
     const r=mode==='invite'&&selectedFriend?await clubApi('friends/'+selectedFriend+'/challenge',{n:boardSize,cadence}):await requestRoom('',{kind:mode,n:boardSize,cadence,ticket:crypto.randomUUID()});
     if(routeVersion!==version){
       if(!r.ready)await requestRoom('/'+r.id+'/cancel',{}).catch(()=>{});

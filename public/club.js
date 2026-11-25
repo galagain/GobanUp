@@ -120,7 +120,7 @@ function friendsPage() {
 function challengeDialog(id) {
   const friend=clubState.friends.find(f=>f.id===id);
   if (!friend) return;
-  popup('Inviter '+safe(friend.name),`<fieldset class="friend-sizes"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<label class="pace-option"><input type="radio" name="friend-size" value="${n}" ${n===boardSize?'checked':''}><span>${n} × ${n}</span></label>`).join('')}</div></fieldset>${cadencePicker('invite','friend-dialog')}<div class="actions">${btn('Envoyer l’invitation','send-game:'+id,'friends',true)}</div>`);
+  popup('Inviter '+safe(friend.name),`<fieldset class="friend-sizes"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<label class="pace-option"><input type="radio" name="friend-size" value="${n}" ${n===boardSize?'checked':''}><span>${n} × ${n}</span></label>`).join('')}</div></fieldset>${cadencePicker('friend-dialog')}<div class="actions">${btn('Envoyer l’invitation','send-game:'+id,'friends',true)}</div>`);
 }
 async function clubAction(action,id) {
   try {
@@ -132,7 +132,7 @@ async function clubAction(action,id) {
       case 'unfriend': popup('Retirer cet ami ?',btn('Retirer de mes amis','remove:'+id)+btn('Annuler','close')); break;
       case 'remove': case 'accept': await clubApi('friends/'+id+'/'+action,{}); modal.close(); await refreshClub(); break;
       case 'friend-game': challengeDialog(id); break;
-      case 'send-game': { const r=await clubApi('friends/'+id+'/challenge',{n:Number($('[name=friend-size]:checked').value),cadence:cadenceFor('invite')}); modal.close(); enterRoom(r); break; }
+      case 'send-game': { const r=await clubApi('friends/'+id+'/challenge',{n:Number($('[name=friend-size]:checked').value),cadence:selectedCadence()}); modal.close(); enterRoom(r); break; }
       case 'accept-room': enterRoom(await requestRoom('/'+id+'/join',{})); break;
       case 'decline-room': await requestRoom('/'+id+'/decline',{}); await refreshClub(); break;
     }

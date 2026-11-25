@@ -9,9 +9,15 @@ function playTabs(){
   return '<div class="play-tabs" role="group" aria-label="Mode de jeu">'+playModes.map(([mode,title,picture])=>
     `<button data-play-tab="${mode}" aria-pressed="${mode===playTab}"><svg aria-hidden="true" viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${picture}</svg>${title}</button>`).join('')+'</div>';
 }
-function cadenceFor(mode){
-  const fallback=mode==='bot'?'none':'10+0', value=get('cadence-'+mode,fallback);
-  return Cadences.valid(value)?value:fallback;
+function selectedCadence(){
+  const shared=get('cadence',null);
+  if(Cadences.valid(shared))return shared;
+  // The former per-mode preferences have no timestamps. Prefer the online lobby.
+  for(const mode of ['queue','bot','invite']){
+    const previous=get('cadence-'+mode,null);
+    if(Cadences.valid(previous)){save('cadence',previous);return previous}
+  }
+  return '10+0';
 }
 // The larger marks identify each family. The small clocks show each time control.
 const paceArt={
@@ -32,8 +38,8 @@ function timeGlyph(id){
   const [minutes,increment]=id.split('+').map(Number);
   return paceGlyph(`<circle cx="9" cy="10" r="6.7"/><path d="M9 5.8V10" transform="rotate(${minutes*6} 9 10)"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/>${increment?'<path class="increment-mark" d="M15.4 12.1v5m-2.5-2.5h5"/>':''}`,'0 0 20 20');
 }
-function cadencePicker(mode,group=mode){
-  const choice=cadenceFor(mode);
+function cadencePicker(group){
+  const choice=selectedCadence();
   const option=id=>{
     const label=Cadences.label(id), display=id.endsWith('d')?label.replace(' / coup',''):label;
     return `<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" aria-label="${label}" ${choice===id?'checked':''}><span>${timeGlyph(id)}<b>${display}</b></span></label>`;
@@ -43,7 +49,7 @@ function cadencePicker(mode,group=mode){
     return `<div class="pace-group pace-${family}" role="group" aria-label="${title}"><h3><span class="pace-emblem">${paceGlyph(picture)}</span><span>${title}${family==='daily'?'<small>par coup</small>':''}</span></h3><div>${ids.map(option).join('')}</div></div>`;
   }).join('');
   const custom=choice!=='none' && !Cadences.groups.some(([,ids])=>ids.includes(choice));
-  return `<fieldset class="pace-picker" data-pace-mode="${mode}"><legend>Cadence <small>${Cadences.label(choice)}</small></legend>
+  return `<fieldset class="pace-picker"><legend>Cadence <small>${Cadences.label(choice)}</small></legend>
     <div class="pace-grid">${rows}</div><div class="pace-shortcuts">${option('none')}<button type="button" class="custom-pace" aria-haspopup="dialog" aria-pressed="${custom}">${timeGlyph('custom')}Personnalisée</button></div></fieldset>`;
 }
 function boardSizeMark(n){
@@ -55,9 +61,12 @@ function boardSizeMark(n){
   }
   return paceGlyph(`<rect x="3" y="3" width="14" height="14" rx="1.3"/><path d="${grid}"/>`,'0 0 20 20');
 }
-function setPace(mode,id){
-  save('cadence-'+mode,id);
-  for(const picker of document.querySelectorAll(`.pace-picker[data-pace-mode="${mode}"]`)){
+function setPace(id){
+  save('cadence',id);
+  showSelectedPace(id);
+}
+function showSelectedPace(id){
+  for(const picker of document.querySelectorAll('.pace-picker')){
     let matched=false;
     for(const radio of picker.querySelectorAll('input[type=radio]')){
       radio.checked=radio.value===id;
@@ -67,8 +76,8 @@ function setPace(mode,id){
     picker.querySelector('.custom-pace').setAttribute('aria-pressed',!matched);
   }
 }
-function editPace(mode){
-  const choice=cadenceFor(mode);
+function editPace(){
+  const choice=selectedCadence();
   const [minutes,increment]=(choice.includes('+')?choice:'10+0').split('+');
   const dialog=document.createElement('dialog');
   dialog.setAttribute('aria-labelledby','custom-pace-title');
@@ -82,7 +91,7 @@ function editPace(mode){
     event.preventDefault();
     const fields=event.currentTarget.elements;
     const id=fields.minutes.valueAsNumber+'+'+fields.increment.valueAsNumber;
-    if(Cadences.valid(id)){setPace(mode,id);dismiss()}
+    if(Cadences.valid(id)){setPace(id);dismiss()}
   };
   dialog.onclose=()=>{window.removeEventListener('hashchange',dismiss);dialog.remove()};
   window.addEventListener('hashchange',dismiss);
@@ -90,11 +99,14 @@ function editPace(mode){
 }
 document.addEventListener('click',event=>{
   const button=event.target.closest('.custom-pace');
-  if(button)editPace(button.closest('.pace-picker').dataset.paceMode);
+  if(button)editPace();
 });
 document.addEventListener('change',event=>{
   const input=event.target, picker=input.closest('.pace-picker');
-  if(picker && input.type==='radio' && Cadences.valid(input.value))setPace(picker.dataset.paceMode,input.value);
+  if(picker && input.type==='radio' && Cadences.valid(input.value))setPace(input.value);
+});
+window.addEventListener('storage',event=>{
+  if(event.key==='gobanup.cadence' || event.key===null)showSelectedPace(selectedCadence());
 });
 function friendOptions(){
   const friends=clubState.friends.filter(f=>f.accepted);

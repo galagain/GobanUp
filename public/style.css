@@ -72,8 +72,8 @@ dialog .pace-picker{margin-top:18px}
 .pace-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
 .pace-group{--tone:#edb991;--tint:#37302a;min-width:0;padding:9px;border:1px solid #49433b;border-radius:10px;background:linear-gradient(115deg,var(--tint),#302e2a 80%)}
 .pace-blitz{--tone:#e3c37f;--tint:#373329}
-.pace-rapid{--tone:#aed0b5;--tint:#2e3630}
-.pace-daily{--tone:#b5c3df;--tint:#2f3239}
+.pace-rapid{--tone:var(--wood);--tint:var(--dark-accent)}
+.pace-daily{--tone:var(--wood-light);--tint:#37332d}
 .pace-group:has(input:checked){border-color:color-mix(in srgb,var(--tone) 58%,#433d36)}
 .pace-group h3{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 2px 8px 3px;margin:0;min-height:46px;font-size:1rem;font-weight:650;letter-spacing:-.025em;line-height:1.12}
 .pace-group h3 small{display:block;margin-top:3px;font-size:.66rem;font-weight:500;letter-spacing:0;color:var(--muted)}
