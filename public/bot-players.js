@@ -135,7 +135,7 @@ const BotPlayers=(()=>{
       const gnu=g.level==='gnugo',search=g.level==='katago';
       const fuego=g.level==='fuego',human=g.level.startsWith('human-'),raylu=g.level==='raylu';
       const elf=g.level==='elf-v1';
-      const url=elf?'bots/leela-worker.js':fuego?'bots/fuego-worker.js':gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
+      const url=elf?'bots/leela-worker.js?v=1':fuego?'bots/fuego-worker.js':gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
       worker??=new Worker(new URL(url,document.baseURI),{name:name(g.level)});
       worker.onerror=worker.onmessageerror=fail;
       worker.onmessage=({data})=>{

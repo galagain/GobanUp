@@ -5,7 +5,7 @@ let ready;
 async function loadEngine(){
   const [engine,response]=await Promise.all([
     LeelaModule({locateFile:file=>new URL('leela/'+file,self.location.href).href}),
-    fetch('leela/elf-v1.gz')
+    fetch('leela/elf-v1.gz?v=d13c4099')
   ]);
   if(!response.ok)throw Error('Modèle ELF indisponible');
   const stream=response.body.pipeThrough(new DecompressionStream('gzip'));
