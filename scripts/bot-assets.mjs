@@ -22,10 +22,12 @@ export async function copyBotAssets(dir){
   }else{
     await downloadModels(dir);
   }
-  const fuego=dir+'/bots/fuego';
-  if(process.env.FUEGO_ASSETS){
-    await cp(process.env.FUEGO_ASSETS,fuego,{recursive:true});
-  }else{
-    execFileSync('docker',['build','--target','fuego-artifacts','--output','type=local,dest='+fuego,'.'],{stdio:'inherit'});
+  for(const [name,source] of [['fuego',process.env.FUEGO_ASSETS],['leela',process.env.LEELA_ASSETS]]){
+    const dest=dir+'/bots/'+name;
+    if(source){
+      await cp(source,dest,{recursive:true});
+    }else{
+      execFileSync('docker',['build','--target',name+'-artifacts','--output','type=local,dest='+dest,'.'],{stdio:'inherit'});
+    }
   }
 }

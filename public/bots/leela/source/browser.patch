@@ -1,0 +1,135 @@
+--- a/src/Network.cpp
++++ b/src/Network.cpp
+@@ -56 +56 @@
+-#include "zlib.h"
++#include <fstream>
+@@ -228,53 +228,14 @@
+-    // Count size of the network
+-    myprintf("Detecting residual layers...");
+-    // We are version 1 or 2
+-    if (m_value_head_not_stm) {
+-        myprintf("v%d...", 2);
+-    } else {
+-        myprintf("v%d...", 1);
+-    }
+-    // First line was the version number
+-    auto linecount = size_t{1};
+-    auto channels = 0;
+-    auto line = std::string{};
+-    while (std::getline(wtfile, line)) {
+-        auto iss = std::stringstream{line};
+-        // Third line of parameters are the convolution layer biases,
+-        // so this tells us the amount of channels in the residual layers.
+-        // We are assuming all layers have the same amount of filters.
+-        if (linecount == 2) {
+-            auto count = std::distance(std::istream_iterator<std::string>(iss),
+-                                       std::istream_iterator<std::string>());
+-            myprintf("%d channels...", count);
+-            channels = count;
+-        }
+-        linecount++;
+-    }
+-    // 1 format id, 1 input layer (4 x weights), 14 ending weights,
+-    // the rest are residuals, every residual has 8 x weight lines
+-    auto residual_blocks = linecount - (1 + 4 + 14);
+-    if (residual_blocks % 8 != 0) {
+-        myprintf("\nInconsistent number of weights in the file.\n");
+-        return {0, 0};
+-    }
+-    residual_blocks /= 8;
+-    myprintf("%d blocks.\n", residual_blocks);
+-
+-    // Re-read file and process
+-    wtfile.clear();
+-    wtfile.seekg(0, std::ios::beg);
+-
+-    // Get the file format id out of the way
+-    std::getline(wtfile, line);
+-
+-    const auto plain_conv_layers = 1 + (residual_blocks * 2);
+-    const auto plain_conv_wts = plain_conv_layers * 4;
+-    linecount = 0;
+-    while (std::getline(wtfile, line)) {
+-        std::vector<float> weights;
+-        auto it_line = line.cbegin();
+-        const auto ok = phrase_parse(it_line, line.cend(),
+-                                     *x3::float_, x3::space, weights);
+-        if (!ok || it_line != line.cend()) {
+-            myprintf("\nFailed to parse weight file. Error on line %d.\n",
+-                    linecount + 2); //+1 from version line, +1 from 0-indexing
++    // The build packs the verified upstream file into little-endian float tensors.
++    uint32_t header[3];
++    if (!wtfile.read(reinterpret_cast<char*>(header), sizeof(header)) ||
++        header[0] != 2 || header[1] != 224 || header[2] != 20) return {0, 0};
++    m_value_head_not_stm = true;
++    const int channels = header[1], residual_blocks = header[2];
++    const int plain_conv_wts = (1 + 2 * residual_blocks) * 4;
++    int linecount = 0;
++    while (linecount < plain_conv_wts + 14) {
++        uint32_t count;
++        if (!wtfile.read(reinterpret_cast<char*>(&count), sizeof(count)) ||
++            count > 224 * 224 * 9) return {0, 0};
++        std::vector<float> weights(count);
++        if (!wtfile.read(reinterpret_cast<char*>(weights.data()), count * sizeof(float)))
+@@ -282 +242,0 @@
+-        }
+@@ -340,47 +300,2 @@
+-    // gzopen supports both gz and non-gz files, will decompress
+-    // or just read directly as needed.
+-    auto gzhandle = gzopen(filename.c_str(), "rb");
+-    if (gzhandle == nullptr) {
+-        myprintf("Could not open weights file: %s\n", filename.c_str());
+-        return {0, 0};
+-    }
+-    // Stream the gz file in to a memory buffer stream.
+-    auto buffer = std::stringstream{};
+-    constexpr auto chunkBufferSize = 64 * 1024;
+-    std::vector<char> chunkBuffer(chunkBufferSize);
+-    while (true) {
+-        auto bytesRead = gzread(gzhandle, chunkBuffer.data(), chunkBufferSize);
+-        if (bytesRead == 0) break;
+-        if (bytesRead < 0) {
+-            myprintf("Failed to decompress or read: %s\n", filename.c_str());
+-            gzclose(gzhandle);
+-            return {0, 0};
+-        }
+-        assert(bytesRead <= chunkBufferSize);
+-        buffer.write(chunkBuffer.data(), bytesRead);
+-    }
+-    gzclose(gzhandle);
+-
+-    // Read format version
+-    auto line = std::string{};
+-    auto format_version = -1;
+-    if (std::getline(buffer, line)) {
+-        auto iss = std::stringstream{line};
+-        // First line is the file format version id
+-        iss >> format_version;
+-        if (iss.fail() || (format_version != 1 && format_version != 2)) {
+-            myprintf("Weights file is the wrong version.\n");
+-            return {0, 0};
+-        } else {
+-            // Version 2 networks are identical to v1, except
+-            // that they return the value for black instead of
+-            // the player to move. This is used by ELF Open Go.
+-            if (format_version == 2) {
+-                m_value_head_not_stm = true;
+-            } else {
+-                m_value_head_not_stm = false;
+-            }
+-            return load_v1_network(buffer);
+-        }
+-    }
+-    return {0, 0};
++    std::ifstream weights(filename, std::ios::binary);
++    return load_v1_network(weights);
+--- a/src/GTP.cpp
++++ b/src/GTP.cpp
+@@ -333 +333 @@
+-    cfg_weightsfile = leelaz_file("best-network");
++    cfg_weightsfile = "/elf";
+--- a/src/UCTSearch.cpp
++++ b/src/UCTSearch.cpp
+@@ -829 +829 @@
+-    Training::record(m_network, m_rootstate, *m_root);
++    // Browser games do not collect self-play training samples.

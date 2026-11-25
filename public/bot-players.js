@@ -15,17 +15,17 @@ const BotPlayers=(()=>{
     ['KaTrain · styles',Object.entries(styles).map(([id,style])=>[id,'KaTrain · '+style.name])]
   ];
   const names=new Map(groups.flatMap(([,options])=>options));
-  for(const [,entries] of OpponentCatalog.groups){
-    for(const entry of entries)if(entry.engine)names.set(entry.key,entry.name==='GnuGo'?'GNU Go':entry.name);
+  for(const [,entries] of OpponentCatalog){
+    for(const [id,label] of entries)names.set(id,label);
   }
   const name=id=>names.get(id)||names.get('normal');
   const external=id=>names.has(id) && id!=='easy' && id!=='normal';
+  const supportsSize=(id,n)=>names.has(id) && (id!=='elf-v1' || n===19);
   function options(){
-    const catalogGroups=local=>OpponentCatalog.groups.map(([label,entries])=>[
-      (local?'Sur GobanUp':'Fiches OGS')+' · '+label,
-      entries.filter(entry=>Boolean(entry.engine)===local).map(entry=>[entry.key,(local?name(entry.key):entry.name)+' · '+entry.rank])
+    const opponents=OpponentCatalog.map(([label,entries])=>[
+      label,entries.map(([id,label,rank])=>[id,label+' · '+rank])
     ]);
-    const all=[...catalogGroups(true),...groups,...catalogGroups(false)];
+    const all=[...opponents,...groups];
     return all.map(([label,items])=>`<optgroup label="${label}">${items.map(([id,text])=>`<option value="${id}">${text}</option>`).join('')}</optgroup>`).join('');
   }
   function policy(logits,n,states){
@@ -134,14 +134,15 @@ const BotPlayers=(()=>{
     try{
       const gnu=g.level==='gnugo',search=g.level==='katago';
       const fuego=g.level==='fuego',human=g.level.startsWith('human-'),raylu=g.level==='raylu';
-      const url=fuego?'bots/fuego-worker.js':gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
+      const elf=g.level==='elf-v1';
+      const url=elf?'bots/leela-worker.js':fuego?'bots/fuego-worker.js':gnu?'bots/gnugo-worker.js':'katago/analysis-worker.js?policy=1';
       worker??=new Worker(new URL(url,document.baseURI),{name:name(g.level)});
       worker.onerror=worker.onmessageerror=fail;
       worker.onmessage=({data})=>{
         if(!current() || data.id!==id)return;
         try{
           let move;
-          if(gnu || fuego){if(data.error)throw Error('engine');move=data.move}
+          if(gnu || fuego || elf){if(data.error)throw Error('engine');move=data.move}
           else{
             if(!data.ok)throw Error('KataGo');
             if(human){
@@ -158,10 +159,15 @@ const BotPlayers=(()=>{
               move=raylu?sample(policy(logits,g.n,states).map(c=>({p:c.p,weight:c.prob**4}))):profileMove(g,states,logits);
             }
           }
+          if(elf && move===-2){
+            if(g.clock && Cadences.expired(g.clock,Date.now())){displayClocks();return}
+            if(g.clock)g.clock=Cadences.advance(g.cadence,g.clock,Date.now(),true);
+            g.resigned=2;stop();saveGame();drawGame();return;
+          }
           if(!Number.isInteger(move) || move < -1 || move>=g.n*g.n)throw Error('invalid move');
           if(move!==-1 && !Go.play(states.at(-1),move,2,g.n,states)){
             // The compiled engines can suggest a repetition forbidden by positional superko.
-            if(gnu || fuego)move=-1;
+            if(gnu || fuego || elf)move=-1;
             else throw Error('illegal');
           }
           clearTimeout(timer);pending=null;
@@ -169,8 +175,8 @@ const BotPlayers=(()=>{
           recordLocalMove(move);position=g.moves.length;saveGame();drawGame();
         }catch{fail()}
       };
-      timer=setTimeout(fail,human || raylu?240000:90000);
-      if(fuego){worker.postMessage({id,n:g.n,komi:g.komi??6.5,moves:g.moves})}
+      timer=setTimeout(fail,human || raylu || elf?240000:90000);
+      if(fuego || elf){worker.postMessage({id,n:g.n,komi:g.komi??6.5,moves:g.moves})}
       else if(gnu){
         // GNU Go serializes its reply to SGF. Bound the record size even in long games.
         const start=Math.max(0,ply-65);
@@ -190,5 +196,5 @@ const BotPlayers=(()=>{
       }
     }catch{fail()}
   }
-  return {name,options,external,playable:id=>names.has(id),run,stop,get failed(){return failed}};
+  return {name,options,external,supportsSize,run,stop,get failed(){return failed}};
 })();

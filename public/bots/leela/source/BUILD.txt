@@ -1,0 +1,23 @@
+Leela Zero 0.17 for GobanUp (GPL-3.0-or-later)
+
+Download leela.tar.gz, eigen.tar.gz, browser.cpp, browser.patch, build.sh
+and pack.py from this directory. From the download folder on Linux:
+
+mkdir -p src/browser boost
+tar -xf leela.tar.gz -C src --strip-components=1
+tar -xf eigen.tar.gz -C src/src/Eigen --strip-components=1
+patch -d src -p1 < browser.patch
+cp browser.cpp build.sh src/browser/
+curl -fL 'https://deb.debian.org/debian/pool/main/b/boost1.74/libboost1.74-dev_1.74.0+ds1-21_amd64.deb' -o boost.deb
+echo 'ba14fe04d7f138f874bd3ab3a20c4fd1e9f654e271449b8f3e48d20f942dbb93  boost.deb' | sha256sum -c -
+dpkg-deb -x boost.deb boost
+docker run --rm -v "$PWD/src:/src" -v "$PWD/boost/usr/include:/boost:ro" -w /src emscripten/emsdk@sha256:460fff8f8ac87e11b16447fbd66538a686eafa0e4fb977aa0989ed19fe2079f7 sh browser/build.sh
+
+To build the model asset:
+
+curl -fL 'https://zero.sjeng.org/networks/d13c40993740cb77d85c838b82c08cc9c3f0fbc7d8c3761366e5d59e8f371cbd.gz' -o upstream.gz
+echo 'fcc59e47fb19a19e8f4e421b4371bfc12eeca401a3f1c33fc4624c9f878a982e  upstream.gz' | sha256sum -c -
+python3 pack.py upstream.gz elf-v1.gz
+
+Install src/browser/engine.js, src/browser/engine.wasm and elf-v1.gz
+under bots/leela/ on a copy of GobanUp.

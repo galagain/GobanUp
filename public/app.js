@@ -114,14 +114,17 @@ function lobby(keepBoard=false){
   if(bot){
     const picker=side.querySelector('#level'),footer=side.querySelector('.play-submit'),hint=side.querySelector('#bot-download');
     function showOpponent(){
-      const entry=OpponentCatalog.get(picker.value);
-      const remote=entry && !entry.engine;
-      const large=picker.value.startsWith('human-') || picker.value==='raylu';
-      hint.hidden=!large && !remote;
-      hint.textContent=remote?(['ogs-2143892','ogs-2122166','ogs-2123396'].includes(entry.key)?'Sur OGS · Goban 9 × 9 uniquement':'Taille et cadence à choisir sur OGS'):large?'Premier chargement du modèle · environ 99 Mo':'';
-      footer.innerHTML=remote?`<a class="btn primary" href="${entry.url}" target="_blank" rel="noopener">Voir ${safe(entry.name)} sur OGS ↗</a>`:btn(actionLabel,'bot','right',true);
+      const level=picker.value;
+      const fits=BotPlayers.supportsSize(level,boardSize);
+      const large=level.startsWith('human-') || level==='raylu';
+      hint.textContent=!fits?'Choisissez la taille 19 × 19 pour jouer avec cet adversaire.':
+        level==='elf-v1'?'Premier chargement du modèle · environ 69 Mo':
+        large?'Premier chargement du modèle · environ 99 Mo':'';
+      hint.hidden=!hint.textContent;
+      footer.querySelector('button').disabled=!fits;
     }
-    picker.value=get('bot-level','normal');
+    const saved=get('bot-level','normal');
+    picker.value=saved==='ogs-625990'?'elf-v1':saved;
     if(!picker.value)picker.value='normal';
     picker.onchange=()=>{save('bot-level',picker.value);showOpponent()};
     showOpponent();
@@ -131,7 +134,7 @@ function lobby(keepBoard=false){
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.playable(level))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
+  if(mode==='bot'){const level=$('#level')?.value||get('bot-level','normal');if(!BotPlayers.supportsSize(level,boardSize))return;const g=newGame(boardSize,'bot','Ordinateur');g.level=level;if(level==='elf-v1')g.komi=7.5;g.cadence=selectedCadence();g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);
