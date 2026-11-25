@@ -11,9 +11,25 @@ const main=$('#main'),modal=$('#modal');
 function toast(text){$('#toast').textContent=text;$('#toast').className='show';clearTimeout(timer);timer=setTimeout(()=>$('#toast').className='',3200)}
 function popup(title,body){modal.innerHTML=`<button type="button" class="close" aria-label="Fermer" data-action="close">${icon('close')}</button><h2>${title}</h2>${body}`;if(!modal.open)modal.showModal()}
 modal.addEventListener('click',e=>{if(e.target===modal){const r=modal.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)modal.close()}});
-const routes=[['jouer','stones','Jouer'],['analyse','analysis','Analyse'],['amis','friends','Amis']];
+const tabs = [
+  { key: 'jouer', label: 'Jouer', picture: `
+    <ellipse cx="8.8" cy="10.6" rx="7.4" ry="6.4" fill="#181716" stroke="#8a8780"/>
+    <path d="M4 8.8c1-1.7 2.5-2.6 4.4-2.8" fill="none" stroke="#77736c" stroke-linecap="round"/>
+    <ellipse cx="16" cy="16.3" rx="7" ry="5.8" fill="#b6b1a5"/>
+    <ellipse cx="15.8" cy="15" rx="6.8" ry="5.5" fill="#eeeae0"/>
+    <path d="M11.3 14.3c.6-1.1 1.6-1.8 2.8-2.1" fill="none" stroke="#fffdf8" stroke-linecap="round"/>` },
+  { key: 'analyse', label: 'Analyse', picture: `
+    <path d="M5 19.2v-4.5c0-3.1 2.1-4.4 4.7-4.4H13c2.8 0 5.2-1.5 5.2-5.3m-8.4 5.3c3.6 0 5.1 3.7 8.4 3.7" fill="none" stroke="#c7c3b8" stroke-width="2.3" stroke-linecap="round"/>
+    <circle cx="5" cy="19.1" r="3.4" fill="#eeeae0"/><circle cx="18.2" cy="4.5" r="3.4" fill="#debe90"/>
+    <circle cx="18.9" cy="14.3" r="2.8" fill="#33302c" stroke="#c7c3b8" stroke-width="1.4"/>` },
+  { key: 'amis', label: 'Amis', picture: `
+    <circle cx="16.8" cy="7.8" r="3.7" fill="#aaa69d"/>
+    <path d="M11.5 18.5v-1.8a5.7 5.7 0 0 1 11.4 0v1.8z" fill="#aaa69d"/>
+    <circle cx="8.4" cy="8.5" r="4.1" fill="#e8e4d9"/>
+    <path d="M1.1 20.8v-1.7a7.3 7.3 0 0 1 14.6 0v1.7z" fill="#e8e4d9" stroke="#353330" stroke-width="1.2"/>` }
+];
 function header(route){
-  $('#nav').innerHTML=routes.map(([key,i,label])=>`<a href="#${key}" class="${key===route?'active':''}" ${key===route?'aria-current="page"':''}>${icon(i)}${label}</a>`).join('');
+  $('#nav').innerHTML = tabs.map(({key, label, picture}) => `<a href="#${key}" aria-label="${label}" title="${label}" ${key===route?'aria-current="page" class="active"':''}><svg class="tab-symbol" viewBox="0 0 24 24" aria-hidden="true">${picture}</svg><span>${label}</span></a>`).join('');
   $('#profile').innerHTML=`<span class="avatar">${safe(name.slice(0,1).toUpperCase())}</span><span>${safe(name)}</span>${icon('down',true)}`;
 }
 function page(title,subtitle='',action=''){return `<div class="page-title"><div><h1>${title}</h1>${subtitle?`<p>${subtitle}</p>`:''}</div>${action}</div>`}
