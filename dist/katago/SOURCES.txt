@@ -1,0 +1,21 @@
+GobanUp — analyse locale
+
+Réseau officiel KataGo g170-b6c96-s175395328-d26788732.
+https://github.com/lightvector/KataGo/tree/master/cpp/tests/models
+
+Évaluation et recherche dérivées de Web KatRain (MIT), révision
+a6a67d645048a996d606a410c4e4c4b1051ffd43, src/engine/katago/worker.ts.
+https://github.com/Sir-Teo/web-katrain/tree/a6a67d645048a996d606a410c4e4c4b1051ffd43
+
+Adaptation GobanUp : dans src/utils/goRules.ts, la recherche utilisant
+l'entrée chinese utilise ko='positional', conformément aux règles du jeu
+local. GobanUp fournit le komi 6,5, les positions antérieures et les passes.
+
+Dépendances de compilation : esbuild 0.25.12, pako 2.1.0, @tensorflow/tfjs,
+@tensorflow/tfjs-backend-webgpu et @tensorflow/tfjs-backend-wasm 4.22.0.
+Les trois fichiers tfjs/*.wasm proviennent du dossier dist du backend WASM.
+Le modèle provient de public/models/katago-small.bin.gz à la révision ci-dessus.
+
+Compilation depuis le dossier des sources Web KatRain après installation
+des dépendances et application de l'adaptation ci-dessus :
+esbuild src/engine/katago/worker.ts --bundle --platform=browser --format=iife --minify --legal-comments=eof '--define:import.meta.env.BASE_URL="."' --outfile=analysis-worker.js
