@@ -53,6 +53,7 @@ function panelForCurrentBoard(){
   if (!$('#live-goban')) return emptyStage(boardSize);
   const board = $('#live-goban');
   board.querySelectorAll('button,.sequence-number').forEach(node => node.remove());
+  document.querySelectorAll('[data-seat-clock]').forEach(el=>el.remove());
   return boardShell();
 }
 function gameNavigation(g,index){
@@ -64,7 +65,8 @@ function drawGame(){
   const analysis=reviewing||game.mode==='study', side=boardShell();
   displayedGame={id:game.id,position:forkPosition??position};displayedSetup=false;
   const {states,caps}=makeStates(game),b=states[position],color=turnAt(game,position);
-  const abandoned=game.resigned && position===game.moves.length;
+  if(!analysis && game.mode==='bot' && !game.timedOut && Cadences.expired(game.clock,Date.now())){game.timedOut=game.clock.turn;saveGame()}
+  const abandoned=(game.resigned || game.timedOut) && position===game.moves.length;
   const finished=twoPasses(game.moves,position)||abandoned;
   const canMove=!reviewing&&!finished&&(game.mode!=='bot'||color===1)&&(!['online','link'].includes(game.mode)||game.seat===color);
   paintBoard(b,game.n,game.moves[position-1],!reviewOverview&&(analysis||canMove)?'point':'',color);
@@ -83,6 +85,12 @@ function drawGame(){
   }
   const black=game.mode==='bot'?(account?.name||'Vous'):game.black||'Noir',white=game.mode==='bot'?'Bot · '+(game.level==='easy'?'Découverte':'Tactique'):game.white||'Blanc';
   seats(black,white,caps[position]);
+  if(!analysis && game.clock){
+    for(const [seat,id] of [[1,'black-seat'],[2,'white-seat']]){
+      document.getElementById(id).insertAdjacentHTML('beforeend',`<b class="seat-clock" role="timer" aria-label="Temps de ${seat===1?'Noir':'Blanc'}" data-seat-clock="${seat}"></b>`);
+    }
+    displayClocks();
+  }
   if(reviewing && reviewOverview){
     if(main.querySelector('.review-report')?.dataset.record!==game.id){
       side.innerHTML=`<section class="review-report"><div class="report-scroll">
@@ -117,7 +125,7 @@ function drawGame(){
   }else{
     const played=game.moves.slice(-6).map((m,i)=>`<span><small>${game.moves.length-Math.min(6,game.moves.length)+i+1}.</small> ${coord(m,game.n)}</span>`).join('');
     side.innerHTML=`<div class="panel-head">${icon(game.mode==='bot'?'bot':'stones')}<h2>${safe(gameTitle(game))}</h2></div><div class="side-content">
-    ${info}<p class="move-number">${abandoned?resignationResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
+    ${info}${game.cadence?'<p class="room-settings">'+Cadences.label(game.cadence)+'</p>':''}<p class="move-number">${abandoned?finishResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
     ${played?`<div class="played-moves" aria-label="Derniers coups">${played}</div>`:''}
     <div class="actions">${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>
     <div class="side-foot">${!finished?btn('Abandonner','resign'):''}${btn('Nouvelle partie','home','plus')}</div></div>`;

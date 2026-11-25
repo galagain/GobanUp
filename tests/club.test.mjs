@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -77,6 +78,41 @@ test('comptes, invitations, reprise et recherche d’adversaire', async t => {
   await b(room+'/resign',{},409);
   await stop(); await start();
   assert.equal((await b('club')).rooms.find(g=>g.id===invite.id).resigned,2);
+  await t.test('la cadence suit les invitations, les recherches et les pendules',async()=>{
+    const queue=(fn,cadence)=>fn('rooms',{kind:'queue',n:13,cadence,ticket:crypto.randomUUID()});
+    const blitz=await queue(a,'3+2');
+    const rapid=await queue(b,'10+0');
+    assert.notEqual(blitz.id,rapid.id);
+    assert.equal(blitz.clock,null);
+    const paired=await queue(b,'3+2');
+    assert.equal(paired.id,blitz.id);
+    assert.deepEqual(paired.clock.remaining,[180000,180000]);
+    const path='rooms/'+blitz.id;
+    const move=await a(path+'/move',{p:2,at:0,clock:{turn:0}});
+    assert.equal(move.clock.turn,2);
+    assert.equal(move.clock.remaining[0],182000-(move.clock.since-paired.clock.since));
+    const store=new DatabaseSync(join(dir,'test.sqlite'));
+    try{
+      store.prepare("UPDATE rooms SET clock=json_set(clock,'$.since',?) WHERE id=?").run(Date.now()-181000,blitz.id);
+    }finally{store.close()}
+    assert.equal((await a(path)).timedOut,2);
+    await b(path+'/move',{p:4,at:1},409);
+    await a(path+'/resign',{},409);
+    assert.equal((await b('club')).rooms.find(g=>g.id===blitz.id).timedOut,2);
+
+    const invite=await a('friends/'+whiteUser.id+'/challenge',{n:9,cadence:'1d'});
+    assert.equal((await b('club')).rooms.find(g=>g.id===invite.id).cadence,'1d');
+    const daily='rooms/'+invite.id;
+    const joined=await b(daily+'/join',{});
+    assert.deepEqual(joined.clock.remaining,[86400000,86400000]);
+    assert.equal((await a(daily+'/move',{p:-1,at:0})).clock.remaining[0],86400000);
+    const completed=await b(daily+'/move',{p:-1,at:1});
+    assert.equal(completed.clock.turn,0);
+    await stop();await start();
+    assert.deepEqual((await a(daily)).clock,completed.clock);
+    assert.equal((await otherDevice(path)).timedOut,2);
+    await a('rooms',{kind:'invite',n:9,ticket:crypto.randomUUID(),cadence:'bogus'},400);
+  });
   await otherDevice('logout',{});
   await otherDevice('club',undefined,401);
 });

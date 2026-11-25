@@ -37,6 +37,8 @@ export const games = sqliteTable("rooms", {
   moves: text("moves").notNull().default("[]"),
   revision: integer("revision").notNull().default(0),
   touched: integer("touched").notNull(),
+  cadence: text("cadence").notNull().default("none"),
+  clock: text("clock"),
   resigned: integer("resigned"),
   recipient: text("recipient").references(() => users.id),
 }, t => [

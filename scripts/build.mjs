@@ -28,4 +28,4 @@ for (const [attribute,file] of html.matchAll(/(?:src|href)="([\w-]+\.(?:js|css))
 await writeFile(indexPath,html);
 const rules = await readFile('public/engine.js','utf8');
 const roomApi = await readFile('server/rooms.js','utf8');
-await writeFile('dist/server/index.js',rules+'\n'+await readFile('server/club.js','utf8')+'\n'+roomApi);
+await writeFile('dist/server/index.js',rules+'\n'+await readFile('public/cadences.js','utf8')+'\n'+await readFile('server/club.js','utf8')+'\n'+roomApi);

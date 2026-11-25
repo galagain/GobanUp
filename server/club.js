@@ -62,6 +62,11 @@ async function club(request, env, path) {
       sql('INSERT INTO sessions VALUES (?,?,?)',await sessionDigest(fresh),account.id,now+sessionAge*1000)]);
     return sessionResponse(account,fresh);
   }
+  const invitation=!post && /^\/api\/rooms\/([a-f0-9-]+)\/preview$/.exec(path);
+  if(invitation && uuid.test(invitation[1])){
+    const room=await sql("SELECT size AS n,cadence FROM rooms WHERE id=? AND kind='invite'",invitation[1]).first();
+    return room?json(room):fail('Invitation indisponible.',404);
+  }
   if (!user) return fail('Connectez-vous pour jouer avec le club.',401);
   if (path.startsWith('/api/rooms')) return api(request,db,path,user);
   if (path === '/api/club' && !post) {
@@ -86,12 +91,15 @@ async function club(request, env, path) {
   const [,target,action] = match;
   const [lo,hi] = [user.id,target].sort();
   if (action === 'challenge') {
+    const cadence=body.cadence??'none';
+    if(!Cadences.valid(cadence))return fail('Cadence incorrecte.',400);
     if (![9,13,19].includes(body.n)) return fail('Taille de goban incorrecte.',400);
     const id = crypto.randomUUID();
-    const results = await db.batch([sql(`INSERT OR IGNORE INTO rooms(id,kind,size,black,black_name,touched,recipient)
-      SELECT ?,'friend',?,?,?,?,? FROM friendships WHERE lo=? AND hi=? AND accepted=1`,id,body.n,user.id,user.name,now,target,lo,hi),
+    const results = await db.batch([sql(`INSERT OR IGNORE INTO rooms(id,kind,size,black,black_name,touched,recipient,cadence)
+      SELECT ?,'friend',?,?,?,?,?,? FROM friendships WHERE lo=? AND hi=? AND accepted=1`,id,body.n,user.id,user.name,now,target,cadence,lo,hi),
       sql('SELECT * FROM rooms WHERE black=? AND recipient=? AND white IS NULL',user.id,target)]);
     const room = results[1].results[0];
+    if(room && (room.size!==body.n || room.cadence!==cadence))return fail('Une invitation avec d’autres réglages est déjà en attente.',409);
     return room ? json(visible(room,user.id)) : fail('Ajoutez ce joueur à vos amis pour l’inviter.',403);
   }
   const change = action === 'accept'

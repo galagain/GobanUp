@@ -49,8 +49,8 @@ function gameTitle(g){return g.title||({bot:'Partie rapide',local:'Partie à deu
 const turnAt=(g,i)=>((g.first===2?1:0)+i)%2+1;
 function makeStates(g){let board=g.start?g.start.slice():Array(g.n*g.n).fill(0);const states=[board],caps=[[0,0]];for(let i=0;i<g.moves.length;i++){let cap=caps[i].slice();if(g.moves[i]!==-1){const r=Go.play(board,g.moves[i],turnAt(g,i),g.n,states);if(!r)throw Error('Coup incorrect');board=r.board;cap[turnAt(g,i)-1]+=r.captured}states.push(board);caps.push(cap)}return {states,caps}}
 const twoPasses=(moves,index=moves.length)=>index>=2 && moves[index-1]===-1 && moves[index-2]===-1;
-const ended=g=>Boolean(g.resigned)||twoPasses(g.moves);
-const resignationResult=g=>(g.resigned===1?'Blanc':'Noir')+' gagne par abandon';
+const ended=g=>Boolean(g.resigned||g.timedOut)||twoPasses(g.moves);
+const finishResult=g=>((g.resigned||g.timedOut)===1?'Blanc':'Noir')+(g.timedOut?' gagne au temps':' gagne par abandon');
 const coord=(p,n)=>p===-1?'Passe':'ABCDEFGHJKLMNOPQRST'[p%n]+(n-Math.floor(p/n));
 function boardSvg(board,n,last=-1,keys=false){const e=boardMargin,side=100,gap=(side-2*e)/(n-1),axis=v=>e+v*gap,rad=gap*.455;let lines='',dots='',stones='',labels='';
 for(let i=0;i<n;i++){const v=axis(i);lines+=`M${v} ${e}V${side-e}M${e} ${v}H${side-e}`;if(keys)labels+=`<text x="${v}" y="3.5">${'ABCDEFGHJKLMNOPQRST'[i]}</text><text x="2.9" y="${v+1.05}">${n-i}</text>`}
@@ -62,8 +62,16 @@ function readGame(id){return games.find(g=>g.id===id)||demos.find(g=>g.id===id)}
 function shareUrl(){const {id,n,moves,opponent}=game;const payload={id,n,moves,resigned:game.resigned,opponent:game.seat===1?name:opponent,seat:3-game.seat};return location.href.split('#')[0]+'#invitation/'+encodeURIComponent(JSON.stringify(payload))}
 function share(){popup('Transmettre la partie',`<p>Envoyez ce lien à votre partenaire pour qu’il ouvre le goban et joue son coup.</p><label for="url">Lien de la position</label><textarea id="url" readonly rows="3">${safe(shareUrl())}</textarea><div class="actions">${btn('Copier le lien','copy','share',true)}</div>`)}
 function receive(raw){try{const data=JSON.parse(decodeURIComponent(raw));const {id,n,moves,seat}=data;if(!/^[a-f0-9-]{36}$/.test(id)||![9,13,19].includes(n)||![1,2].includes(seat)||!Array.isArray(moves)||moves.length>3000||!moves.every(p=>Number.isInteger(p)&&p>=-1&&p<n*n))throw Error();const old=games.find(g=>g.id===id);let g={id,n,moves,seat,mode:'link',date:Date.now(),opponent:String(data.opponent||'Partenaire').slice(0,32)};if(data.resigned!=null){if(data.resigned!==3-seat||twoPasses(moves))throw Error();g.resigned=data.resigned}makeStates(g);if(old){if(old.mode!=='link'||old.n!==n||!moves.slice(0,Math.min(old.moves.length,moves.length)).every((m,i)=>old.moves[i]===m))throw Error();if(ended(old)||old.moves.length>moves.length||old.moves.length===moves.length&&!g.resigned||old.seat!==seat)g=old}game=g;saveGame();location.replace('#partie/'+id)}catch{toast('Ce lien de partie est invalide.');location.replace('#jouer')}}
-function move(p){const st=makeStates(game).states,color=turnAt(game,game.moves.length);if(ended(game)||reviewing||game.mode==='link'&&game.seat!==color)return;const result=p===-1?null:Go.play(st.at(-1),p,color,game.n,st);if(p!==-1&&!result){toast('Coup interdit sur cette intersection.');return}game.moves.push(p);
-if(game.mode==='bot'&&!ended(game)){const boards=makeStates(game).states,b=boards.at(-1);let best=-Infinity,choice=-1;if(p!==-1){for(let q=0;q<b.length;q++){const r=Go.play(b,q,2,game.n,boards);if(!r)continue;const g=Go.group(r.board,q,game.n);const adj=Go.adjacent(q,game.n);if(adj.every(v=>b[v]===2)&&!r.captured)continue;const score=r.captured*(game.level==='easy'?2:12)+Math.random()*(game.level==='easy'?12:4)+adj.filter(i=>b[i]===1).length*.7+(g.liberties.size===1?-7:0)-Math.abs((q%game.n)-(game.n-1)/2)*.06;if(score>best){best=score;choice=q}}}game.moves.push(choice)}
+function recordLocalMove(p){
+  if(game.clock){
+    const now=Date.now(),expired=Cadences.expired(game.clock,now);
+    if(expired){game.timedOut=expired;return}
+    game.clock=Cadences.advance(game.cadence,game.clock,now,p===-1 && game.moves.at(-1)===-1);
+  }
+  game.moves.push(p);
+}
+function move(p){const st=makeStates(game).states,color=turnAt(game,game.moves.length);if(ended(game)||reviewing||game.mode==='link'&&game.seat!==color)return;const result=p===-1?null:Go.play(st.at(-1),p,color,game.n,st);if(p!==-1&&!result){toast('Coup interdit sur cette intersection.');return}recordLocalMove(p);
+if(game.mode==='bot'&&!ended(game)){const boards=makeStates(game).states,b=boards.at(-1);let best=-Infinity,choice=-1;if(p!==-1){for(let q=0;q<b.length;q++){const r=Go.play(b,q,2,game.n,boards);if(!r)continue;const g=Go.group(r.board,q,game.n);const adj=Go.adjacent(q,game.n);if(adj.every(v=>b[v]===2)&&!r.captured)continue;const score=r.captured*(game.level==='easy'?2:12)+Math.random()*(game.level==='easy'?12:4)+adj.filter(i=>b[i]===1).length*.7+(g.liberties.size===1?-7:0)-Math.abs((q%game.n)-(game.n-1)/2)*.06;if(score>best){best=score;choice=q}}}recordLocalMove(choice)}
 position=game.moves.length;saveGame();drawGame()}
 
 Object.assign(paths,{
@@ -77,7 +85,7 @@ Object.assign(paths,{
 });
 const artTile=(iconName)=>`<span class="mode-art">${icon(iconName)}</span>`;
 function row(g,link){
-  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(g.mode==='online' ? ((g.seat===1?g.white:g.black) ? 'Contre '+(g.seat===1?g.white:g.black) : 'En attente d’un adversaire') : gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups${g.resigned?' · '+resignationResult(g):''}</small></span>${icon('right',true)}</a>`;
+  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(g.mode==='online' ? ((g.seat===1?g.white:g.black) ? 'Contre '+(g.seat===1?g.white:g.black) : 'En attente d’un adversaire') : gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups${(g.resigned||g.timedOut)?' · '+finishResult(g):''}</small></span>${icon('right',true)}</a>`;
 }
 
 let boardSize=[9,13,19].includes(get('board-size',19))?get('board-size',19):19;
@@ -87,24 +95,26 @@ const playMode=(title,detail,glyph,action,primary=false)=>`<button class="play-m
 function lobby(keepBoard=false){
   const side=keepBoard?panelForCurrentBoard():emptyStage(boardSize);
   if(keepBoard) boardSize=displayedSetup?setupBoard.n:readGame(displayedGame?.id)?.n??boardSize;
-  side.innerHTML=`<div class="panel-head">${icon('play')}<h2>Nouvelle partie</h2></div>
-  <div class="side-content"><fieldset class="size-pick"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></fieldset>
-  <div class="launch-modes">${playMode('Jouer en ligne','Trouver un adversaire','globe','queue',true)}
-  ${playMode('Contre un bot','S’entraîner sur cet appareil','bot','bot')}${playMode('Avec un ami','Créer un lien d’invitation','friends','challenge')}</div>
-  <details class="settings"><summary>${icon('sliders',true)}Réglages du bot</summary><label for="level">Niveau</label><select id="level"><option value="easy">Découverte</option><option value="normal">Tactique</option></select></details></div>`;
-  $('#level').value=get('bot-level','normal');
-  $('#level').onchange=e=>save('bot-level',e.target.value);
+  const bot=playTab==='bot', friend=playTab==='invite';
+  const target=friend?friendOptions():'';
+  const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
+  side.innerHTML=playTabs()+`<div class="side-content play-config"><fieldset class="size-pick"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></fieldset>
+    ${bot?'<label for="level">Niveau du bot</label><select id="level"><option value="easy">Découverte</option><option value="normal">Tactique</option></select>':target}
+    ${cadencePicker(playTab)}</div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
+  if(bot){$('#level').value=get('bot-level','normal');$('#level').onchange=e=>save('bot-level',e.target.value)}
+  if($('#opponent'))$('#opponent').onchange=e=>{selectedFriend=e.target.value;side.querySelector('[data-action="challenge"]').lastChild.textContent=selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'};
   const previous=games.filter(g=>g.mode!=='study'&&!ended(g));
   if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
-  if(mode==='bot'){const g=newGame(boardSize,'bot','Ordinateur');g.level=get('bot-level','normal');launch(g);return}
+  if(mode==='bot'){const g=newGame(boardSize,'bot','Ordinateur');g.level=get('bot-level','normal');g.cadence=cadenceFor(mode);g.clock=Cadences.initial(g.cadence,Date.now());launch(g);return}
   if(!requireAccount(()=>startMode(mode)))return;
   const version=routeVersion;
   const side=emptyStage(boardSize);
   side.innerHTML=`<div class="panel-head">${icon(mode==='queue'?'globe':'friends')}<h2>${mode==='queue'?'Jouer en ligne':'Avec un ami'}</h2></div><div class="side-content"><p role="status">Connexion au salon…</p></div>`;
   try{
-    const r=await requestRoom('',{kind:mode,n:boardSize,ticket:crypto.randomUUID()});
+    const cadence=cadenceFor(mode);
+    const r=mode==='invite'&&selectedFriend?await clubApi('friends/'+selectedFriend+'/challenge',{n:boardSize,cadence}):await requestRoom('',{kind:mode,n:boardSize,cadence,ticket:crypto.randomUUID()});
     if(routeVersion!==version){
       if(!r.ready)await requestRoom('/'+r.id+'/cancel',{}).catch(()=>{});
       return;
@@ -119,6 +129,7 @@ function waitingRoom(r){
   displayedGame={id:r.id,position:0};
   const link=location.href.split('#')[0]+'#rejoindre/'+r.id;
   side.innerHTML=`<div class="panel-head">${icon(r.kind==='queue'?'globe':'friends')}<h2>${r.kind==='queue'?'Recherche en ligne':'Invitation à jouer'}</h2></div><div class="side-content">
+  <p class="room-settings">${r.n} × ${r.n} · ${Cadences.label(r.cadence)}</p>
   <p class="waiting-status" role="status">${r.kind==='queue'?'En attente d’un adversaire…':'En attente de votre ami…'}</p>
   <p>${r.kind==='queue'?'La partie commencera ici dès qu’un joueur vous rejoint.':r.kind==='friend'?'Votre ami peut accepter l’invitation dans l’onglet Amis.':'Transmettez ce lien à votre partenaire.'}</p>
   ${r.kind==='invite'?`<input id="url" aria-label="Lien d’invitation" readonly value="${safe(link)}">${btn('Copier le lien','copy','share',true)}`:''}<div class="side-foot">${btn('Annuler','cancel-room')}</div></div>`;
@@ -180,7 +191,7 @@ async function pollRoom(id,version){
   try{
     const r=await requestRoom('/'+id);
     if(version!==routeVersion)return;
-    if(!activeRoom||r.revision>activeRoom.revision||r.ready&&!activeRoom.ready)roomView(r);
+    if(!activeRoom||r.revision>activeRoom.revision||r.timedOut!==activeRoom.timedOut||r.ready&&!activeRoom.ready)roomView(r);
     $('#network-message')?.remove();
     if(r.ready&&ended(r))return;
   }catch(err){
@@ -262,6 +273,7 @@ async function resign(){
       if(version===routeVersion)roomView(updated);
     }catch(err){if(version===routeVersion)toast(err.message)}
   }else{
+    if(game.clock){if(Cadences.expired(game.clock,Date.now())){displayClocks();return}game.clock=Cadences.advance(game.cadence,game.clock,Date.now(),true)}
     game.resigned=game.mode==='bot'?1:game.seat||turnAt(game,position);
     saveGame();drawGame();
   }
@@ -292,7 +304,9 @@ async function route(){
     pollRoom(id,version);
   }
   else if(key==='rejoindre'){
-    emptyStage(boardSize).innerHTML=`<div class="panel-head"><h2>Invitation à jouer</h2></div><div class="side-content">${btn('Rejoindre la partie','join','friends',true)}</div>`;
+    const side=emptyStage(boardSize);
+    side.innerHTML=`<div class="panel-head"><h2>Invitation à jouer</h2></div><div class="side-content">${btn('Rejoindre la partie','join','friends',true)}</div>`;
+    try{const info=await requestRoom('/'+id+'/preview');if(version===routeVersion)side.querySelector('.side-content').insertAdjacentHTML('afterbegin',`<p>${info.n} × ${info.n} · ${Cadences.label(info.cadence)}</p>`)}catch(err){if(version===routeVersion)toast(err.message)}
   }else if(key==='invitation'){receive(id);return}
   else if(key==='partie'||key==='etude'){
     game=readGame(id);if(!game){location.replace('#jouer');return}
@@ -329,6 +343,7 @@ async function route(){
 document.addEventListener('click',async e=>{
   const button=e.target.closest('button');if(!button)return;
   const {point,place,action}=button.dataset;
+  if(button.dataset.playTab){playTab=button.dataset.playTab;lobby(true);document.querySelector('[data-play-tab="'+playTab+'"]').focus({preventScroll:true});return}
   if(button.dataset.size){boardSize=+button.dataset.size;save('board-size',boardSize);lobby();return}
   if(place!==undefined){setupBoard.start[+place]=brush;showSetup();return}
   if(button.dataset.brush!==undefined){brush=+button.dataset.brush;showSetup();return}

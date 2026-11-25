@@ -52,3 +52,36 @@ main{max-width:1560px;padding:clamp(22px,2.8vw,45px) clamp(20px,3vw,50px) 38px}
 
 .board .candidate-pin{position:absolute;pointer-events:none}.review-tools{margin:8px 0}.eval-units,.move-swing,.win-caption{font-size:.875rem;line-height:1.4}.eval-units{margin:.35rem 0 .8rem;color:var(--muted)}.move-swing{margin:.5rem 0}.win-caption{display:flex;justify-content:space-between}.side-foot:has([data-action=resign]){display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .score-track{position:relative;background:#eee9dd;height:10px;border:1px solid #969386;overflow:hidden;border-radius:5px;margin-top:.65rem}.score-track i{display:block;background:#22231f;height:100%}.score-track::after{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:1px solid #a88152}.scale-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:.76rem;font-variant-numeric:tabular-nums}.scale-labels span{flex:1}.scale-labels span:nth-child(2){text-align:center}.scale-labels span:last-child{text-align:right}
+
+/* The mode, settings and launch action share one side panel. */
+#desk-tools:has(.play-tabs){display:flex;flex-direction:column;overflow:hidden}
+.play-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex:none;border-bottom:1px solid var(--edge)}
+.play-tabs button{position:relative;display:grid;justify-items:center;align-content:center;gap:4px;min-height:78px;padding:9px 2px;color:var(--muted);font-size:.88rem;font-weight:600}
+.play-tabs button+button{border-left:1px solid var(--edge)}
+.play-tabs button svg{width:30px;height:30px}
+.play-tabs button:hover,.play-tabs button[aria-pressed=true]{background:var(--nav-hover);color:var(--ink)}
+.play-tabs button[aria-pressed=true]::after{position:absolute;content:'';inset:auto 22% -1px;height:3px;background:var(--wood);border-radius:3px}
+.play-config{overflow:auto;flex:1;min-height:0;scrollbar-width:thin;padding:clamp(14px,1.6vw,24px)}
+.play-config .size-pick{margin-bottom:17px}
+.pace-picker{padding:0;margin:18px 0 0;border:0;min-width:0}
+.pace-picker legend{font-size:1.12rem;letter-spacing:-.025em;padding:0}
+.pace-group{margin:9px 0 13px}.pace-group h3{font-size:.8rem;color:var(--muted);font-weight:550;margin:0 0 5px}
+.pace-group>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pace-option{cursor:pointer;position:relative;display:block;margin:0}
+.pace-option input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.pace-option span{display:grid;place-items:center;min-height:35px;padding:4px 1px;border-radius:6px;background:var(--nav-hover);border:1px solid var(--edge);font-size:.85rem;color:var(--ink);font-weight:550;text-align:center}
+.pace-option:hover span{background:var(--raised)}
+.pace-option input:checked+span{background:var(--dark-accent);border-color:var(--wood);color:var(--wood-light);box-shadow:inset 0 0 0 .5px var(--wood)}
+.pace-option input:focus-visible+span{outline:2px solid var(--wood-light);outline-offset:2px}
+.pace-picker>.pace-option span{min-height:32px}
+.play-submit{padding:10px clamp(14px,1.6vw,24px);border-top:1px solid var(--edge)}
+.play-submit .primary{width:100%;display:flex;flex-direction:row-reverse;justify-content:center}
+.room-settings{font-size:.84rem;color:var(--muted)}
+.seat-clock{display:inline-block;min-width:57px;border:1px solid var(--edge);border-radius:5px;padding:1px 8px;background:var(--panel);color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap;font-size:.95rem}
+.seat-clock.running{background:var(--wood);border-color:var(--wood);color:#28221b}
+@media(max-width:690px){
+  .play-tabs button{min-height:47px;display:flex;align-items:center;justify-content:center;gap:6px}.play-tabs button svg{width:23px;height:23px}
+  .play-submit{padding-block:5px}.play-submit .primary{min-height:34px}
+}
+.pace-picker legend{width:100%}
+.pace-picker legend small{float:right;margin-top:3px;font-size:.79rem;font-weight:550;letter-spacing:0;color:var(--wood-light)}

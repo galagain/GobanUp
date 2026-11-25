@@ -1,8 +1,9 @@
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const json = (value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
+const json = (value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Server-Time':String(Date.now())}});
 function visible(row,player) {
-  return {id:row.id,kind:row.kind,n:row.size,moves:JSON.parse(row.moves),seat:row.black===player?1:2,
+  const clock=JSON.parse(row.clock||'null');
+  return {cadence:row.cadence,clock,timedOut:Cadences.expired(clock,Date.now()),id:row.id,kind:row.kind,n:row.size,moves:JSON.parse(row.moves),seat:row.black===player?1:2,
     black:row.black_name,white:row.white_name,ready:!!row.white,resigned:row.resigned,revision:row.revision};
 }
 async function api(request,db,path,user) {
@@ -12,15 +13,15 @@ async function api(request,db,path,user) {
   const name=user.name;
   const now=Date.now();
   if(path==='/api/rooms'&&request.method==='POST') {
-    const {kind,n,ticket}=body;
-    if(!['queue','invite'].includes(kind)||![9,13,19].includes(n)||!uuid.test(ticket))return json({error:'Format incorrect.'},400);
-    const create=stmt(`INSERT OR IGNORE INTO rooms (id,kind,size,black,black_name,touched)
-      SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM rooms WHERE white_ticket=?)`,ticket,kind,n,player,name,now,ticket);
+    const {kind,n,ticket,cadence='none'}=body;
+    if(!Cadences.valid(cadence)||!['queue','invite'].includes(kind)||![9,13,19].includes(n)||!uuid.test(ticket))return json({error:'Format incorrect.'},400);
+    const create=stmt(`INSERT OR IGNORE INTO rooms (id,kind,size,black,black_name,touched,cadence)
+      SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM rooms WHERE white_ticket=?)`,ticket,kind,n,player,name,now,cadence,ticket);
     const find=stmt('SELECT * FROM rooms WHERE (id=? AND black=?) OR (white_ticket=? AND white=?)',ticket,player,ticket,player);
     const actions=[];
-    if(kind==='queue') actions.push(stmt(`UPDATE rooms SET white=?,white_name=?,white_ticket=?,touched=?
-      WHERE id=(SELECT id FROM rooms WHERE kind='queue' AND size=? AND white IS NULL AND black<>? AND touched>? ORDER BY touched,id LIMIT 1)
-      AND NOT EXISTS (SELECT 1 FROM rooms WHERE id=? OR white_ticket=?)`,player,name,ticket,now,n,player,now-60000,ticket,ticket));
+    if(kind==='queue') actions.push(stmt(`UPDATE rooms SET white=?,white_name=?,white_ticket=?,touched=?,clock=?
+      WHERE id=(SELECT id FROM rooms WHERE kind='queue' AND size=? AND cadence=? AND white IS NULL AND black<>? AND touched>? ORDER BY touched,id LIMIT 1)
+      AND NOT EXISTS (SELECT 1 FROM rooms WHERE id=? OR white_ticket=?)`,player,name,ticket,now,JSON.stringify(Cadences.initial(cadence,now)),n,cadence,player,now-60000,ticket,ticket));
     const results=await db.batch([...actions,create,find]);const row=results.at(-1).results[0];
     return row?json(visible(row,player)):json({error:'Relancez la recherche.'},409);
   }
@@ -31,9 +32,12 @@ async function api(request,db,path,user) {
     const res=await stmt('DELETE FROM rooms WHERE id=? AND recipient=? AND white IS NULL',id,player).run();
     return res.meta.changes?json({closed:true}):json({error:'Invitation indisponible.'},409);
   }
-  if(action==='join'&&request.method==='POST')
-    await stmt("UPDATE rooms SET white=?,white_name=?,touched=? WHERE id=? AND (kind='invite' OR (kind='friend' AND recipient=?)) AND white IS NULL AND black<>?",player,name,now,id,player,player).run();
   let row=await stmt('SELECT * FROM rooms WHERE id=?',id).first();
+  if(row && action==='join' && request.method==='POST' && !row.white){
+    const clock=Cadences.initial(row.cadence,now);
+    await stmt("UPDATE rooms SET white=?,white_name=?,touched=?,clock=? WHERE id=? AND (kind='invite' OR (kind='friend' AND recipient=?)) AND white IS NULL AND black<>?",player,name,now,JSON.stringify(clock),id,player,player).run();
+    row=await stmt('SELECT * FROM rooms WHERE id=?',id).first();
+  }
   if(!row)return json({error:'Ce salon a été fermé.'},404);
   if(row.black!==player&&row.white!==player)return json({error:'Ce salon est déjà occupé ou privé.'},403);
   if(!action&&request.method==='GET'){
@@ -49,12 +53,15 @@ async function api(request,db,path,user) {
   const moves=JSON.parse(row.moves),color=moves.length%2+1;
   const seat=row.black===player?1:2;
   if(action==='resign' && row.resigned===seat)return json(visible(row,player));
+  const clock=JSON.parse(row.clock||'null');
+  if(Cadences.expired(clock,now))return json({error:'La partie est terminée au temps.'},409);
   if(!row.white || row.resigned || (moves.length>=2 && moves.slice(-2).every(m=>m===-1)))
     return json({error:'Cette partie n’est pas en cours.'},409);
   if(action==='resign'){
-    const update=await stmt('UPDATE rooms SET resigned=?,revision=revision+1,touched=? WHERE id=? AND revision=? AND resigned IS NULL',seat,now,id,row.revision).run();
+    const stopped=JSON.stringify(Cadences.advance(row.cadence,clock,now,true));
+    const update=await stmt('UPDATE rooms SET resigned=?,clock=?,revision=revision+1,touched=? WHERE id=? AND revision=? AND resigned IS NULL',seat,stopped,now,id,row.revision).run();
     if(!update.meta.changes)return json({error:'La position a changé. Réessayez.'},409);
-    return json(visible({...row,resigned:seat,revision:row.revision+1},player));
+    return json(visible({...row,clock:stopped,resigned:seat,revision:row.revision+1},player));
   }
   if(action!=='move')return json({error:'Action inconnue.'},400);
   if(body.at!==moves.length || color!==seat)return json({error:'La position a changé. Actualisation en cours.'},409);
@@ -65,9 +72,11 @@ async function api(request,db,path,user) {
     if(!Go.play(states.at(-1),p,color,row.size,states))return json({error:'Ce coup est interdit.'},400);
   }
   moves.push(p);
-  const res=await stmt('UPDATE rooms SET moves=?,revision=revision+1,touched=? WHERE id=? AND revision=?',JSON.stringify(moves),now,id,row.revision).run();
+  const finished=p===-1 && moves.at(-2)===-1;
+  const nextClock=JSON.stringify(Cadences.advance(row.cadence,clock,now,finished));
+  const res=await stmt('UPDATE rooms SET moves=?,clock=?,revision=revision+1,touched=? WHERE id=? AND revision=?',JSON.stringify(moves),nextClock,now,id,row.revision).run();
   if(!res.meta.changes)return json({error:'La position a changé.'},409);
-  return json(visible({...row,moves:JSON.stringify(moves),revision:row.revision+1},player));
+  return json(visible({...row,clock:nextClock,moves:JSON.stringify(moves),revision:row.revision+1},player));
 }
 
 export default {
