@@ -32,7 +32,6 @@ function header(route){
   $('#nav').innerHTML = tabs.map(({key, label, picture}) => `<a href="#${key}" aria-label="${label}" title="${label}" ${key===route?'aria-current="page" class="active"':''}><svg class="tab-symbol" viewBox="0 0 24 24" aria-hidden="true">${picture}</svg><span>${label}</span></a>`).join('');
   $('#profile').innerHTML=`<span class="avatar">${safe(name.slice(0,1).toUpperCase())}</span><span>${safe(name)}</span>${icon('down',true)}`;
 }
-function page(title,subtitle='',action=''){return `<div class="page-title"><div><h1>${title}</h1>${subtitle?`<p>${subtitle}</p>`:''}</div>${action}</div>`}
 function btn(label,act,i='',primary=false){return `<button class="btn ${primary?'primary':''}" data-action="${act}">${i?icon(i):''}${label}</button>`}
 function newGame(n,mode,opponent){return {id:crypto.randomUUID(),n,mode,opponent,moves:[],date:Date.now()}}
 function saveGame(){games=[game,...games.filter(g=>g.id!==game.id)].slice(0,80);save('games',games)}
@@ -67,9 +66,6 @@ Object.assign(paths,{
  stones:'<circle cx="9" cy="9" r="6"/><path d="M16 8.5a6 6 0 1 1-7.5 7.5"/>'
 });
 const artTile=(iconName)=>`<span class="mode-art">${icon(iconName)}</span>`;
-function optionCard(title,description,glyph,action){
-  return `<button class="mode-card" data-action="${action}">${artTile(glyph)}<span><strong>${title}</strong><small>${description}</small></span>${icon('right',true)}</button>`;
-}
 function row(g,link){
   return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups</small></span>${icon('right',true)}</a>`;
 }
@@ -78,8 +74,9 @@ let boardSize=[9,13,19].includes(get('board-size',19))?get('board-size',19):19;
 let incomingRoom=null,friendLaunch=false;
 const playMode=(title,detail,glyph,action,primary=false)=>`<button class="play-mode ${primary?'featured':''}" data-action="${action}">
   <span class="action-symbol">${icon(glyph)}</span><span><strong>${title}</strong><small>${detail}</small></span></button>`;
-function lobby(){
-  const side=emptyStage(boardSize);
+function lobby(keepBoard=false){
+  const side=keepBoard?panelForCurrentBoard():emptyStage(boardSize);
+  if(keepBoard) boardSize=displayedSetup?setupBoard.n:readGame(displayedGame?.id)?.n??boardSize;
   side.innerHTML=`<div class="panel-head">${icon('play')}<h2>Nouvelle partie</h2></div>
   <div class="side-content"><fieldset class="size-pick"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></fieldset>
   <div class="launch-modes">${playMode('Jouer en ligne','Trouver un adversaire','globe','queue',true)}
@@ -88,7 +85,7 @@ function lobby(){
   $('#level').value=get('bot-level','normal');
   $('#level').onchange=e=>save('bot-level',e.target.value);
   const previous=games.filter(g=>g.mode!=='study'&&!ended(g));
-  if(previous.length)$('#desk-extra').innerHTML=`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`;
+  if(previous.length)side.querySelector('.side-content').insertAdjacentHTML('beforeend',`<details class="resume-list"><summary>Reprendre une partie (${previous.length})</summary>${previous.map(g=>row(g,g.mode==='online'?'salon':'partie')).join('')}</details>`);
 }
 async function startMode(mode){
   if(mode==='bot'){const g=newGame(boardSize,'bot','Ordinateur');g.level=get('bot-level','normal');launch(g);return}
@@ -108,6 +105,7 @@ async function startMode(mode){
 }
 function waitingRoom(r){
   const side=emptyStage(r.n);
+  displayedGame={id:r.id,position:0};
   const link=location.href.split('#')[0]+'#rejoindre/'+r.id;
   side.innerHTML=`<div class="panel-head">${icon(r.kind==='queue'?'globe':'friends')}<h2>${r.kind==='queue'?'Recherche en ligne':'Invitation à jouer'}</h2></div><div class="side-content">
   <p class="waiting-status" role="status">${r.kind==='queue'?'En attente d’un adversaire…':'En attente de votre ami…'}</p>
@@ -116,10 +114,12 @@ function waitingRoom(r){
 }
 
 function library(){
-  main.innerHTML=page('Analyse','Explorez une partie ou construisez une position avec KataGo.')+
-  `<div class="mode-grid first">${optionCard('Importer une partie','Ouvrir un fichier SGF.','file','import')}${optionCard('Définir une position','Placer les pierres sur le goban.','edit','setup')}</div>
-  <input type="file" id="sgf-input" accept=".sgf,application/x-go-sgf" hidden>
-  ${games.length?`<section class="records"><h2>Mes parties et études</h2>${games.map(g=>row(g,'etude')).join('')}</section>`:''}`;
+  const side=panelForCurrentBoard();
+  side.innerHTML=`<div class="side-content"><div class="launch-modes">
+    ${playMode('Importer une partie','Ouvrir un fichier SGF','file','import',true)}
+    ${playMode('Définir une position','Placer les pierres sur le goban','edit','setup')}</div>
+    <input type="file" id="sgf-input" accept=".sgf,application/x-go-sgf" hidden>
+    ${games.length?`<section class="records"><h2>Mes parties et études</h2>${games.map(g=>row(g,'etude')).join('')}</section>`:''}</div>`;
   $('#sgf-input').onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
@@ -130,7 +130,7 @@ function library(){
   };
 }
 function friendsPage(){
-  main.innerHTML=page('Amis','Vos partenaires de jeu.',btn('Ajouter un ami','add','plus',true))+
+  main.innerHTML=`<div class="friends-actions">${btn('Ajouter un ami','add','plus',true)}</div>`+
   (friends.length?`<div class="panel">${friends.map((f,i)=>`<div class="friend-row"><span class="avatar">${safe(f.slice(0,1).toUpperCase())}</span><strong>${safe(f)}</strong>${btn('Inviter','challenge:'+i,'friends')}</div>`).join('')}</div>`:
     `<div class="empty-panel">${artTile('friends')}<h2>Votre liste d’amis est vide</h2><p>Ajoutez un pseudo pour retrouver vos partenaires sur cet appareil.</p></div>`);
 }
@@ -148,10 +148,11 @@ function identity(profile){
   };
 }
 let setupBoard,brush=1;
-function openSetup(){setupBoard=newGame(19,'study','');setupBoard.start=Array(361).fill(0);setupBoard.first=1;setupBoard.title='Position libre';brush=1;showSetup()}
+function openSetup(){setupBoard=newGame(displayedGame?readGame(displayedGame.id).n:boardSize,'study','');setupBoard.start=Array(setupBoard.n**2).fill(0);setupBoard.first=1;setupBoard.title='Position libre';brush=1;showSetup()}
 function showSetup(){
   const n=setupBoard.n;
-  const side=boardShell('Analyse');
+  displayedGame=null;displayedSetup=true;
+  const side=boardShell();
   seats('Noir','Blanc');paintBoard(setupBoard.start,n,-1,'place');
   side.innerHTML=`<div class="panel-head">${icon('edit')}<h2>Définir une position</h2></div><div class="side-content">
   <label for="editor-size">Taille du goban</label><select id="editor-size">${[9,13,19].map(v=>`<option value="${v}" ${v===n?'selected':''}>${v} × ${v}</option>`).join('')}</select>
@@ -210,7 +211,9 @@ async function route(){
   const hadBoard=!!$('#board-desk');
   activeRoom=null;reviewing=false;
   const [key,id]=location.hash.slice(1).split('/');
-  header(['etude','position','analyse'].includes(key)?'analyse':key==='amis'?'amis':'jouer');
+  const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
+  header(tab);
+  main.setAttribute('aria-label',tabs.find(t=>t.key===tab).label);
   if(key==='salon'){
     const cached=incomingRoom?.id===id?incomingRoom:readGame(id);
     incomingRoom=null;
@@ -224,12 +227,25 @@ async function route(){
   else if(key==='partie'||key==='etude'){
     game=readGame(id);if(!game){location.replace('#jouer');return}
     if(game.mode==='online'&&key==='partie'){location.replace('#salon/'+id);return}
-    reviewing=key==='etude';if(game.mode==='study')header('analyse');position=reviewing&&ended(game)?game.moves.length-2:game.moves.length;drawGame();
+    reviewing=key==='etude';if(game.mode==='study'){header('analyse');main.setAttribute('aria-label','Analyse')}position=reviewing&&ended(game)?game.moves.length-2:game.moves.length;drawGame();
     if(reviewing||autoAnalyze===game.id){autoAnalyze=null;document.querySelector('[data-kata=run]')?.click()}
-  }else if(key==='amis')friendsPage();
-  else if(key==='analyse')library();
+  }else if(key==='amis'){displayedGame=null;displayedSetup=false;friendsPage()}
+  else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)?.ready!==false){
+    game=readGame(displayedGame.id);position=displayedGame.position;reviewing=true;drawGame();
+    document.querySelector('[data-kata=run]')?.click();
+  }
+  else if(key==='analyse'&&hadBoard&&displayedSetup)showSetup();
+  else if(key==='analyse'||key==='bibliotheque')library();
   else if(key==='position')openSetup();
-  else {lobby();if(friendLaunch){friendLaunch=false;startMode('invite')}}
+  else {
+    const current=hadBoard&&key==='jouer'&&displayedGame?readGame(displayedGame.id):null;
+    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length&&!friendLaunch){
+      if(current.mode==='online'){location.replace('#salon/'+current.id);return}
+      history.replaceState(null,'','#partie/'+current.id);
+      game=current;position=current.moves.length;drawGame();
+    }else lobby(key==='jouer'&&hadBoard&&!friendLaunch);
+    if(friendLaunch){friendLaunch=false;startMode('invite')}
+  }
   if(!hadBoard||!$('#board-desk'))window.scrollTo(0,0);
 }
 document.addEventListener('click',async e=>{
@@ -243,10 +259,10 @@ document.addEventListener('click',async e=>{
   const [a,id]=action.split(':');
   switch(a){
     case 'close':modal.close();break;
-    case 'new':case 'home':location.hash='jouer';break;
+    case 'new':case 'home':location.hash='nouvelle';break;
     case 'queue':case 'bot':await startMode(a);break;
     case 'challenge':if(location.hash==='#amis'){friendLaunch=true;location.hash='jouer'}else await startMode('invite');break;
-    case 'library':location.hash='analyse';break;
+    case 'library':location.hash='bibliotheque';break;
     case 'add':case 'profile':identity(a==='profile');break;
     case 'import':modal.close();$('#sgf-input').click();break;
     case 'setup':location.hash='position';break;

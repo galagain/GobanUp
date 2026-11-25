@@ -16,7 +16,7 @@ const LocalAnalysis = (() => {
   }
   function detach() {
     cancel();
-    preview=null;
+    resetPreview();
     current = null;
     enabled = false;
     result = null;

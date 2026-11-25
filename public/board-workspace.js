@@ -6,16 +6,14 @@ function hitStyle(p,n) {
   const step=boardSpan/(n-1);
   return `left:${boardMargin+p%n*step}%;top:${boardMargin+Math.floor(p/n)*step}%;width:${step}%;height:${step}%`;
 }
-function boardShell(section){
-  let shell=document.querySelector('#board-desk');
-  if(!shell){
-    main.innerHTML=`<section id="board-desk"><div class="desk-title"><h1></h1></div><div class="desk-grid">
+let displayedGame = null;
+let displayedSetup = false;
+function boardShell(){
+  if(!$('#board-desk')){
+    main.innerHTML=`<section id="board-desk"><div class="desk-grid">
       <div class="board-column"><div class="seat" id="white-seat"></div><div class="board-wrap"><div class="board" id="live-goban" role="group"></div></div><div class="seat" id="black-seat"></div></div>
-      <aside class="desk-side" id="desk-tools"></aside></div><div id="desk-extra"></div></section>`;
-    shell=$('#board-desk');
+      <aside class="desk-side" id="desk-tools"></aside></div></section>`;
   }
-  shell.querySelector('h1').textContent=section;
-  $('#desk-extra').replaceChildren();
   return $('#desk-tools');
 }
 function seats(black='Noir',white='Blanc',caps=null) {
@@ -29,16 +27,32 @@ function paintBoard(board,n,last=-1,mode='',color=1){
   const el=$('#live-goban');
   el.setAttribute('aria-label',`Goban ${n} × ${n}`);
   el.dataset.turn=color;
-  el.innerHTML=boardSvg(board,n,last,true)+board.map((v,p)=>{
+  // Keep the grid and stones mounted when only the available controls change.
+  const signature = n + ':' + last + ':' + board.join('');
+  if (el.dataset.position !== signature) {
+    el.innerHTML = boardSvg(board,n,last,true);
+    el.dataset.position = signature;
+  } else {
+    el.querySelectorAll('button,.sequence-number').forEach(node => node.remove());
+  }
+  delete el.dataset.preview;
+  el.insertAdjacentHTML('beforeend', board.map((v,p)=>{
     if(mode==='point'&&v===0)return `<button data-point="${p}" style="${hitStyle(p,n)}" aria-label="Jouer en ${coord(p,n)}"></button>`;
     if(mode==='place')return `<button data-place="${p}" style="${hitStyle(p,n)}" aria-label="${coord(p,n)} · ${['Vide','Noir','Blanc'][v]}"></button>`;
     return '';
-  }).join('');
+  }).join(''));
 }
-function emptyStage(n,section='Jouer'){
-  const side=boardShell(section);
+function emptyStage(n){
+  displayedGame=null;displayedSetup=false;
+  const side=boardShell();
   paintBoard(Array(n*n).fill(0),n);seats('Vous','Adversaire');
   return side;
+}
+function panelForCurrentBoard(){
+  if (!$('#live-goban')) return emptyStage(boardSize);
+  const board = $('#live-goban');
+  board.querySelectorAll('button,.sequence-number').forEach(node => node.remove());
+  return boardShell();
 }
 function gameNavigation(g,index){
   const steps=[['first','Premier coup',0],['left','Coup précédent',Math.max(0,index-1)],['right','Coup suivant',Math.min(g.moves.length,index+1)],['last','Dernier coup',g.moves.length]];
@@ -46,7 +60,8 @@ function gameNavigation(g,index){
   <input id="slider" aria-label="Position dans la partie" type="range" min="0" max="${g.moves.length}" value="${index}">`;
 }
 function drawGame(){
-  const analysis=reviewing||game.mode==='study', side=boardShell(analysis?'Analyse':'Jouer');
+  const analysis=reviewing||game.mode==='study', side=boardShell();
+  displayedGame={id:game.id, position};displayedSetup=false;
   const {states,caps}=makeStates(game),b=states[position],color=turnAt(game,position);
   const finished=position>=2&&game.moves.slice(position-2,position).every(p=>p===-1);
   const canMove=!reviewing&&!finished&&(game.mode!=='bot'||color===1)&&(!['online','link'].includes(game.mode)||game.seat===color);
