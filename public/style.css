@@ -70,19 +70,17 @@ dialog .pace-picker{margin-top:16px}
 .pace-tabs button{position:relative;color:var(--muted);padding:6px 0 8px;font-size:.82rem}
 .pace-tabs button[aria-selected=true]{color:var(--ink);font-weight:620}
 .pace-tabs button[aria-selected=true]::after{content:'';position:absolute;inset:auto 0 -1px;height:2px;background:var(--wood)}
-.pace-group{padding:10px 0 8px;border-bottom:1px solid var(--edge)}
-.pace-group h3{display:flex;align-items:center;gap:7px;margin:0 0 2px;font-size:.87rem;color:var(--ink);font-weight:620}
+.pace-group{margin-top:9px;padding:8px;border:1px solid var(--edge);border-radius:7px}
+.pace-group h3{display:flex;align-items:center;gap:7px;margin:0 0 6px;font-size:.87rem;color:var(--ink);font-weight:620}
 .pace-group h3 svg{width:17px;height:17px;color:var(--wood);flex:none}
 .pace-group>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:5px}
 .pace-option{cursor:pointer;position:relative;display:block;margin:0;min-width:0}
 .pace-option input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
-.pace-option span{display:flex;align-items:center;gap:7px;min-height:32px;padding:3px 5px;border-radius:5px;font-size:.83rem;font-weight:500;color:var(--muted)}
-.pace-option span::before{content:'';flex:none;width:9px;height:9px;border:1px solid #817a70;border-radius:50%}
+.pace-option span{display:grid;place-items:center;min-height:33px;padding:3px;border:1px solid var(--edge);border-radius:4px;background:var(--nav-hover);font-size:.83rem;font-weight:550;text-align:center;color:var(--ink)}
 .pace-option:only-child{grid-column:1/-1}
-.pace-option:hover span{color:var(--ink);background:var(--nav-hover)}
-.pace-option input:checked+span{color:var(--wood-light);font-weight:650}
-.pace-option input:checked+span::before{background:var(--wood);border-color:var(--wood);box-shadow:inset 0 0 0 2px var(--panel)}
-.pace-option input:focus-visible+span{outline:2px solid var(--wood-light);outline-offset:-2px}
+.pace-option:hover span{background:var(--raised)}
+.pace-option input:checked+span{border-color:var(--wood);background:var(--dark-accent);color:var(--wood-light);font-weight:650}
+.pace-option input:focus-visible+span{outline:2px solid var(--wood-light);outline-offset:1px}
 .play-options{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px 12px;margin-top:12px}
 .play-options .size-pick{display:contents}
 .play-options .size-pick>span,.play-options label{font-size:.81rem;color:var(--muted);font-weight:550;margin:0}
