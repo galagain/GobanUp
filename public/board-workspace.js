@@ -83,7 +83,7 @@ function drawGame(){
       mark.setAttribute('aria-hidden','true');$('#live-goban').append(mark);
     }
   }
-  const black=game.mode==='bot'?(account?.name||'Vous'):game.black||'Noir',white=game.mode==='bot'?'Bot · '+(game.level==='easy'?'Découverte':'Tactique'):game.white||'Blanc';
+  const black=game.mode==='bot'?(account?.name||'Vous'):game.black||'Noir',white=game.mode==='bot'?BotPlayers.name(game.level):game.white||'Blanc';
   seats(black,white,caps[position]);
   if(!analysis && game.clock){
     for(const [seat,id] of [[1,'black-seat'],[2,'white-seat']]){
@@ -123,12 +123,15 @@ function drawGame(){
     side.querySelector('.analysis-body').scrollTop=scroll;
     if($('#slider'))$('#slider').oninput=e=>{position=+e.target.value;drawGame();$('#slider').focus()};
   }else{
+    const engineTurn=game.mode==='bot' && BotPlayers.external(game.level) && !finished && color===2;
     const played=game.moves.slice(-6).map((m,i)=>`<span><small>${game.moves.length-Math.min(6,game.moves.length)+i+1}.</small> ${coord(m,game.n)}</span>`).join('');
     side.innerHTML=`<div class="panel-head">${icon(game.mode==='bot'?'bot':'stones')}<h2>${safe(gameTitle(game))}</h2></div><div class="side-content">
-    ${info}${game.cadence?'<p class="room-settings">'+Cadences.label(game.cadence)+'</p>':''}<p class="move-number">${abandoned?finishResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
+    ${info}${game.cadence?'<p class="room-settings">'+Cadences.label(game.cadence)+'</p>':''}<p class="move-number" role="status">${engineTurn?(BotPlayers.failed?'Le moteur local est indisponible.':BotPlayers.name(game.level)+' réfléchit…'):abandoned?finishResult(game):finished?`Score · Noir ${numberFR(score[1])} / Blanc ${numberFR(score[2])}`:game.mode==='online'?(color===game.seat?'À vous de jouer.':'Votre adversaire réfléchit…'):position?'Coup '+position:'Posez votre première pierre.'}</p>
     ${played?`<div class="played-moves" aria-label="Derniers coups">${played}</div>`:''}
-    <div class="actions">${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>
+    <div class="actions">${engineTurn && BotPlayers.failed?btn('Réessayer','retry-bot'): ''}${canMove?btn('Passer','pass'):''}${game.mode==='link'&&(game.seat!==color||finished)?btn('Transmettre le lien','share','share',true):''}${btn(game.moves.length?'Revoir ma partie':'Analyser','review:'+game.id,'analysis')}</div>
     <div class="side-foot">${!finished?btn('Abandonner','resign'):''}${btn('Nouvelle partie','home','plus')}</div></div>`;
+    if(engineTurn)BotPlayers.run(game);
+    else if(finished)BotPlayers.stop();
   }
 }
 const numberFR=v=>new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1}).format(v);

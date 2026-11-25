@@ -74,7 +74,7 @@ const server = createServer(async (req,res) => {
     const path=files.get(url.pathname==='/'?'/index.html':url.pathname);
     if (!path || !['GET','HEAD'].includes(req.method)) { res.writeHead(404).end(); return; }
     res.writeHead(200,{'Content-Type':types[extname(path)] || 'application/octet-stream','Content-Length':statSync(path).size,
-      'Cache-Control':url.pathname.includes('/katago/')?'public, max-age=86400':'no-cache'});
+      'Cache-Control':(url.pathname.startsWith('/katago/')||url.pathname.startsWith('/bots/gnugo/'))?'public, max-age=86400':'no-cache'});
     if (req.method==='HEAD') res.end();
     else createReadStream(path).on('error',()=>res.destroy()).pipe(res);
   } catch (e) { console.error(e.message); if (!res.headersSent) res.writeHead(500); res.end(); }

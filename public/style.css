@@ -100,3 +100,4 @@ dialog .pace-picker{margin-top:16px}
   .play-tabs button{min-height:47px;display:flex;align-items:center;justify-content:center;gap:6px}.play-tabs button svg{width:23px;height:23px}
   .play-submit{padding-block:5px}.play-submit .primary{min-height:34px}
 }
+.play-options .bot-credits{grid-column:1/-1;justify-self:end;color:var(--muted);font-size:.76rem;text-decoration:underline}

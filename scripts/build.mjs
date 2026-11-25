@@ -1,8 +1,10 @@
+import {copyGnuGo} from './gnugo-assets.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, cp, readFile, writeFile, rm } from 'node:fs/promises';
 await mkdir('dist/server', {recursive:true});
 await rm('dist/client',{recursive:true,force:true});
 await cp('public','dist/client',{recursive:true});
+await copyGnuGo('dist/client/bots/gnugo');
 // The review's classic scripts and their relative ES imports must come from the same release.
 const reviewFiles=['local-analysis.js','review-summary.js','move-review.js','browser-review.js','review-grade.js'];
 const reviewHash=createHash('sha256');

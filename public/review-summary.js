@@ -11,7 +11,7 @@ const ReviewSummary=(()=>{
 
   function countsTable(record,entries,badges){
     let names=[record.black||'Noir',record.white||'Blanc'];
-    if(record.mode==='bot')names=[account?.name||'Vous','Bot'];
+    if(record.mode==='bot')names=[account?.name||'Vous',BotPlayers.name(record.level)];
     if(record.mode==='link'){
       names[record.seat-1]=account?.name||'Vous';
       names[2-record.seat]=record.opponent||'Adversaire';
