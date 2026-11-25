@@ -1,24 +1,59 @@
 'use strict';
 let playTab='queue', selectedFriend='';
 const playModes=[
-  ['queue','En ligne','<circle cx="16" cy="16" r="12" fill="#ad916b"/><circle cx="16" cy="16" r="11" fill="none" stroke="#f0d6aa" stroke-width="1.8"/><path d="M5 16h22M7 10h18M7 22h18M16 5c-8 6-8 16 0 22 8-6 8-16 0-22Z" stroke="#534534" stroke-width="1.5" fill="none"/>'],
-  ['bot','Bot','<path d="M16 5v5" stroke="#ceb38c" stroke-width="2"/><circle cx="16" cy="4" r="2.2" fill="#ead1aa"/><rect x="2" y="16" width="28" height="6" rx="2" fill="#a48e70"/><rect x="5" y="10" width="22" height="16" rx="5" fill="#e5d4b6"/><rect x="8" y="14" width="16" height="7" rx="3" fill="#49443c"/><path d="M12 17h1m6 0h1" stroke="#f1d4a0" stroke-width="2.5" stroke-linecap="round"/>'],
-  ['invite','Ami','<circle cx="22" cy="10" r="5" fill="#b99d77"/><path d="M14 25v-3a8 8 0 0 1 16 0v3Z" fill="#b99d77"/><circle cx="11" cy="12" r="5.7" fill="#eee4d2"/><path d="M1 28v-3a10 10 0 0 1 20 0v3Z" fill="#eee4d2" stroke="#393630" stroke-width="1.3"/>']
+  ['queue','En ligne','<circle cx="13" cy="13" r="8.2"/><path d="M5 11.5c3.6 2 8 2.1 12.1.1M11.8 5c-3.1 3.4-4.1 7.5-2.8 11.5"/><path class="logo-accent" d="M14.3 17.8c4.2-.8 8.3-3.8 8.6-5.8.2-1-.2-1.8-1.1-2.4"/><circle class="logo-node" cx="14" cy="17.9" r="1.7"/>'],
+  ['bot','Bot','<path d="M12 6V3.5m-8 9H2.5m19 0H20"/><rect x="4.5" y="6.5" width="15" height="13" rx="4.8"/><path class="logo-accent" d="M9.3 15.4c1.8 1.4 3.7 1.4 5.4 0"/><circle class="logo-node" cx="9.2" cy="11.5" r="1.2"/><circle class="logo-node" cx="14.8" cy="11.5" r="1.2"/>'],
+  ['invite','Ami','<circle cx="9" cy="9" r="3.2"/><path d="M2.7 20v-1.4a6.3 6.3 0 0 1 12.6 0V20"/><path class="logo-accent" d="M15.4 5.2a3.3 3.3 0 1 1 .5 6.5m1.3 2.1a5.5 5.5 0 0 1 4.2 5.3v.9"/>']
 ];
 function playTabs(){
   return '<div class="play-tabs" role="group" aria-label="Mode de jeu">'+playModes.map(([mode,title,picture])=>
-    `<button data-play-tab="${mode}" aria-pressed="${mode===playTab}"><svg aria-hidden="true" viewBox="0 0 32 32">${picture}</svg>${title}</button>`).join('')+'</div>';
+    `<button data-play-tab="${mode}" aria-pressed="${mode===playTab}"><svg aria-hidden="true" viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${picture}</svg>${title}</button>`).join('')+'</div>';
 }
 function cadenceFor(mode){
   const fallback=mode==='bot'?'none':'10+0', value=get('cadence-'+mode,fallback);
   return Cadences.valid(value)?value:fallback;
 }
+const paceSymbols={
+  Bullet:'<path d="m13 2-8 11h6l-1 7 8-12h-6z"/>',
+  Blitz:'<path d="m7 4 6 7-6 8m7-15 6 7-6 8"/>',
+  Rapide:'<circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l3 2M9 2h6m-3 0v3"/>',
+  Longue:'<path d="M5 3h14M5 21h14M7 3c0 5 1 6 5 9-4 3-5 4-5 9m10-18c0 5-1 6-5 9 4 3 5 4 5 9"/>',
+  'En différé':'<rect x="3.5" y="5.5" width="17" height="15" rx="3"/><path d="M8 3v5m8-5v5M4 11h16m-12 4h3"/>',
+  Libre:'<path d="M12 12c-2-3-3.5-4-5.5-4a4 4 0 0 0 0 8c4 0 7-8 11-8a4 4 0 0 1 0 8c-2 0-3.5-1-5.5-4Z"/>'
+};
+const paceViews=new Map();
 function cadencePicker(mode,group=mode){
-  const choice=cadenceFor(mode);
+  const choice=cadenceFor(mode), scope=group==='friend-dialog'?group:'lobby';
+  const selectedView=paceViews.get(scope)??(Cadences.more.some(([,ids])=>ids.includes(choice))?'more':'usual');
+  paceViews.set(scope,selectedView);
   const option=id=>`<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" data-cadence-mode="${mode}" ${choice===id?'checked':''}><span>${Cadences.label(id)}</span></label>`;
-  return `<fieldset class="pace-picker"><legend>Cadence <small>${Cadences.label(choice)}</small></legend>${Cadences.groups.map(([title,ids])=>
-    `<div class="pace-group"><h3>${title}</h3><div>${ids.map(option).join('')}</div></div>`).join('')}${option('none')}</fieldset>`;
+  const views=[['usual','Usuelles',Cadences.groups],['more','Plus de cadences',Cadences.more]];
+  const tabs=views.map(([id,title])=>`<button type="button" role="tab" id="tab-${group}-${id}" aria-controls="panel-${group}-${id}" aria-selected="${id===selectedView}" tabindex="${id===selectedView?0:-1}" data-pace-view="${id}">${title}</button>`).join('');
+  const panels=views.map(([id,,groups])=>`<div role="tabpanel" id="panel-${group}-${id}" aria-labelledby="tab-${group}-${id}" ${id===selectedView?'':'hidden'}>${groups.map(([title,ids])=>
+    `<div class="pace-group"><h3><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${paceSymbols[title]}</svg>${title}</h3><div>${ids.map(option).join('')}</div></div>`).join('')}</div>`).join('');
+  return `<fieldset class="pace-picker" data-pace-scope="${scope}"><legend>Cadence <small>${Cadences.label(choice)}</small></legend><div class="pace-tabs" role="tablist" aria-label="Choix de cadences">${tabs}</div>${panels}</fieldset>`;
 }
+function activatePaceView(tab){
+  const picker=tab.closest('.pace-picker');
+  paceViews.set(picker.dataset.paceScope,tab.dataset.paceView);
+  for(const button of picker.querySelectorAll('[role=tab]')){
+    const active=button===tab;
+    button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;
+    document.getElementById(button.getAttribute('aria-controls')).hidden=!active;
+  }
+  tab.focus({preventScroll:true});
+}
+document.addEventListener('click',event=>{
+  const tab=event.target.closest('[data-pace-view]');
+  if(tab)activatePaceView(tab);
+});
+document.addEventListener('keydown',event=>{
+  const tab=event.target.closest('[data-pace-view]');
+  if(!tab || !['Home','End','ArrowLeft','ArrowRight'].includes(event.key))return;
+  event.preventDefault();
+  const tabs=[...tab.parentNode.children];
+  activatePaceView(event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs.find(t=>t!==tab));
+});
 document.addEventListener('change',event=>{
   const input=event.target;
   if(input.dataset.cadenceMode && Cadences.valid(input.value)){

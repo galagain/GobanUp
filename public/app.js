@@ -98,9 +98,9 @@ function lobby(keepBoard=false){
   const bot=playTab==='bot', friend=playTab==='invite';
   const target=friend?friendOptions():'';
   const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
-  side.innerHTML=playTabs()+`<div class="side-content play-config"><fieldset class="size-pick"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></fieldset>
+  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options"><div class="size-pick" role="group" aria-label="Taille du goban"><span>Taille du goban</span><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${n} × ${n}</button>`).join('')}</div></div>
     ${bot?'<label for="level">Niveau du bot</label><select id="level"><option value="easy">Découverte</option><option value="normal">Tactique</option></select>':target}
-    ${cadencePicker(playTab)}</div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
+    </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
   if(bot){$('#level').value=get('bot-level','normal');$('#level').onchange=e=>save('bot-level',e.target.value)}
   if($('#opponent'))$('#opponent').onchange=e=>{selectedFriend=e.target.value;side.querySelector('[data-action="challenge"]').lastChild.textContent=selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'};
   const previous=games.filter(g=>g.mode!=='study'&&!ended(g));
