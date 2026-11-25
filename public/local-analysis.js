@@ -184,15 +184,12 @@ const LocalAnalysis = (() => {
     const color=turnAt(current,current.moves.length-1);
     const swing=Number.isFinite(previous)?Math.round((result.score-previous)*100*(color===1?1:-1)):null;
     const percent=Math.max(0,Math.min(100,result.win*100));
-    const balance=50+Math.max(-1000,Math.min(1000,cp))/20;
-    return `<div class="eval-root"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong></div>
-      <div><small>Évaluation pour Noir</small><strong>${signed.format(cp)} cp</strong></div></div>
-      <div class="score-track" aria-hidden="true"><i style="width:${balance}%"></i></div>
-      <div class="scale-labels" aria-hidden="true"><span>Blanc +10</span><span>0</span><span>Noir +10</span></div>
-      <p class="eval-units">100 centipoints (cp) = 1 point de go. Un signe positif favorise Noir.</p>
-      ${swing===null?'':`<p class="move-swing">Dernier coup · ${signed.format(swing)} cp pour ${color===1?'Noir':'Blanc'}</p>`}
-      <div class="win-caption">Victoire de Noir <b>${number.format(percent)} %</b></div>
-`;
+    return `<div class="position-estimate"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong>
+      <span title="100 centipoints valent un point de go">${signed.format(cp)} cp pour Noir</span></div>
+      <div><small>Victoire de Noir</small><strong>${number.format(percent)} %</strong>
+      <div class="win-track" aria-hidden="true"><i style="width:${percent}%"></i></div></div></div>
+      ${swing===null?'':`<p class="move-swing">Dernier coup · ${signed.format(swing)} cp pour ${color===1?'Noir':'Blanc'}</p>`}`;
+
   }
   function render(){
     const panel=$('#local-analysis');

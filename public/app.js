@@ -55,7 +55,7 @@ const coord=(p,n)=>p===-1?'Passe':'ABCDEFGHJKLMNOPQRST'[p%n]+(n-Math.floor(p/n))
 function boardSvg(board,n,last=-1,keys=false){const e=boardMargin,side=100,gap=(side-2*e)/(n-1),axis=v=>e+v*gap,rad=gap*.455;let lines='',dots='',stones='',labels='';
 for(let i=0;i<n;i++){const v=axis(i);lines+=`M${v} ${e}V${side-e}M${e} ${v}H${side-e}`;if(keys)labels+=`<text x="${v}" y="3.5">${'ABCDEFGHJKLMNOPQRST'[i]}</text><text x="2.9" y="${v+1.05}">${n-i}</text>`}
 const marks=n===9?[2,4,6]:n===13?[3,6,9]:[3,9,15];for(const i of marks)for(const j of marks)if(n===19||(i===marks[1])===(j===marks[1]))dots+=`<circle cx="${axis(i)}" cy="${axis(j)}" r="${gap*.115}"/>`;
-board.forEach((v,i)=>{if(!v)return;const x=axis(i%n),y=axis(Math.floor(i/n));stones+=`<circle cx="${x+.28}" cy="${y+.5}" r="${rad}" fill="#5b402b66"/><circle cx="${x}" cy="${y}" r="${rad}" fill="${v===1?'url(#stoneB)':'url(#stoneW)'}" stroke="${v===1?'#161714':'#dbd4c4'}" stroke-width=".18"/>`;if(last===i)stones+=`<circle cx="${x}" cy="${y}" r="${rad*.34}" fill="none" stroke="${v===1?'#eee':'#4a493e'}" stroke-width="${gap*.09}"/>`});
+board.forEach((v,i)=>{if(!v)return;const x=axis(i%n),y=axis(Math.floor(i/n));stones+=`<circle cx="${x+.28}" cy="${y+.5}" r="${rad}" fill="#5b402b66"/><circle cx="${x}" cy="${y}" r="${rad}" fill="${v===1?'url(#stoneB)':'url(#stoneW)'}" stroke="${v===1?'#161714':'#dbd4c4'}" stroke-width=".18"/>`;if(last===i)stones+=`<circle class="last-stone" cx="${x}" cy="${y}" r="${rad*.34}" fill="none" stroke="${v===1?'#eee':'#4a493e'}" stroke-width="${gap*.09}"/>`});
 return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="stoneB" cx="34%" cy="24%" r="77%"><stop stop-color="#54554e"/><stop offset=".55" stop-color="#282a26"/><stop offset="1" stop-color="#141513"/></radialGradient><radialGradient id="stoneW" cx="34%" cy="24%" r="77%"><stop stop-color="#fffef6"/><stop offset=".72" stop-color="#f0ecdf"/><stop offset="1" stop-color="#d6d0c0"/></radialGradient></defs><path d="${lines}" fill="none" stroke="#745934" stroke-width="${n===19?.16:.28}"/><g fill="#5d482d">${dots}</g><g fill="#624b36" font-family="sans-serif" font-size="${n===19?2.05:2.55}" text-anchor="middle">${labels}</g>${stones}</svg>`}
 function launch(g){game=g;if(g.mode==='link')game.seat=1;saveGame();modal.close();location.hash='partie/'+g.id}
 function readGame(id){return games.find(g=>g.id===id)||demos.find(g=>g.id===id)}
@@ -199,15 +199,32 @@ async function onlineMove(p){
   catch(err){if(version===routeVersion)toast(err.message)}
   finally{pendingMove=false}
 }
-let reviewSource=null, forkPosition=null;
-function openReview(source,index){
+let reviewSource=null, forkPosition=null, reviewOverview=false;
+function setReviewView(overview,ply){
+  ReviewSummary.leave();
+  LocalAnalysis.detach();
+  MoveReview.manual();
+  forkPosition=null;
+  game=reviewSource;
+  position=Math.max(0,Math.min(game.moves.length,ply));
+  reviewOverview=overview;
+  displayedGame={id:game.id,position};
+  drawGame();
+  if(!overview)LocalAnalysis.enable();
+  window.scrollTo(0,0);
+}
+function switchReview(overview,ply=forkPosition??position){
+  const hash='#etude/'+reviewSource.id+(overview?'':'/lignes/'+ply);
+  if(location.hash!==hash)history.pushState(null,'',hash);
+  setReviewView(overview,ply);
+  document.querySelector('.review-report h1,.analysis-panel h1')?.focus({preventScroll:true});
+}
+function openReview(source,index,lines=false){
   reviewing=true;
   reviewSource=game=source;
   forkPosition=null;
-  position=index;
   MoveReview.begin(source);
-  drawGame();
-  LocalAnalysis.enable();
+  setReviewView(!!source.moves.length&&!lines,index);
 }
 function exploreLine(points,ply=points.length){
   if(!reviewing || !points.length)return;
@@ -250,11 +267,18 @@ async function resign(){
   }
 }
 async function route(){
+  const [key,id,view,rawPly]=location.hash.slice(1).split('/');
+  const requestedPly=Number(rawPly);
+  const linePly=source=>Number.isInteger(requestedPly)?requestedPly:source.moves.length;
+  if(key==='etude'&&reviewing&&reviewSource?.id===id){
+    setReviewView(!!reviewSource.moves.length&&view!=='lignes',view==='lignes'?linePly(reviewSource):forkPosition??position);
+    return;
+  }
+  reviewOverview=false;
   MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
-  const hadBoard=!!$('#board-desk');
+  const hadBoard=!!$('#board-desk')||!!$('.review-report');
   const previousReview=reviewSource;
   activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
-  const [key,id]=location.hash.slice(1).split('/');
   const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
   header(tab);
   updateBadge();
@@ -275,7 +299,7 @@ async function route(){
     if(game.mode==='online'&&key==='partie'){location.replace('#salon/'+id);return}
     if(key==='etude'||game.mode==='study'){
       header('analyse');main.setAttribute('aria-label','Analyse');
-      openReview(game,twoPasses(game.moves)?game.moves.length-2:game.moves.length);
+      openReview(game,view==='lignes'?linePly(game):twoPasses(game.moves)?game.moves.length-2:game.moves.length,view==='lignes');
     }else{position=game.moves.length;drawGame()}
   }else if(key==='amis'){displayedGame=null;displayedSetup=false;friendsPage()}
   else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)&&readGame(displayedGame.id).ready!==false){
@@ -311,6 +335,8 @@ document.addEventListener('click',async e=>{
     case 'new':case 'home':location.hash='nouvelle';break;
     case 'queue':case 'bot':await startMode(a);break;
     case 'challenge':await startMode('invite');break;
+    case 'explore-review':switchReview(false);break;
+    case 'review-overview':switchReview(true);break;
     case 'library':location.hash='bibliotheque';break;
     case 'add':case 'profile':case 'login':case 'register':case 'logout':case 'unfriend':case 'remove':case 'accept':case 'friend-game':case 'send-game':case 'accept-room':case 'decline-room':await clubAction(a,id);break;
     case 'import':modal.close();$('#sgf-input').click();break;
@@ -336,7 +362,7 @@ document.addEventListener('click',async e=>{
   }
 });
 document.addEventListener('keydown',event=>{
-  if(!reviewing||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;
+  if(!reviewing||reviewOverview||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;
   if(event.key==='Escape'&&forkPosition!==null){MoveReview.manual();returnToRecord();return}
   const step={ArrowLeft:-1,ArrowRight:1}[event.key];
   if(step){event.preventDefault();position=Math.max(0,Math.min(game.moves.length,position+step));drawGame()}

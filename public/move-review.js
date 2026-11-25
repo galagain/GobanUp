@@ -8,7 +8,6 @@ const MoveReview=(()=>{
   let generation=0,timer,job,record,entries=[],message='',replay=null;
   function stop(){
     ReviewSummary.reset();generation++;clearTimeout(timer);record=null;job=null;entries=[];message='';replay=null;
-    document.querySelector('.review-mark')?.remove();
     const caption=document.querySelector('#move-verdict');if(caption)caption.hidden=true;
   }
   async function request(path,body){
@@ -48,44 +47,36 @@ const MoveReview=(()=>{
   const moveName=e=>coord(e.played.move,record.n);
   function showVerdict(e){
     const caption=$('#move-verdict');
-    document.querySelector('.review-mark')?.remove();
     if(!caption)return;
     caption.hidden=!e;
     if(!e)return;
-    caption.innerHTML=`${badge(e)}<span><b>${e.color===1?'Noir':'Blanc'} · ${moveName(e)}</b> ${safe(e.explanation)}</span>`;
-    if(e.played.move<0)return;
-    const mark=document.createElement('span');
-    mark.className='review-mark grade-'+e.badge;mark.textContent=badges[e.badge][1];
-    mark.setAttribute('aria-hidden','true');mark.style.cssText=hitStyle(e.played.move,record.n);
-    $('#live-goban').append(mark);
+    caption.innerHTML=`<div class="verdict-title">${badge(e)}<small>Coup ${e.ply} · ${e.color===1?'Noir':'Blanc'} ${moveName(e)}</small></div><p>${safe(e.explanation)}</p>`;
   }
   function jump(ply){
     game=reviewSource;forkPosition=null;replay=null;position=ply;drawGame();
   }
   function render(){
+    const progress=job?.status==='complete'?'Revue terminée':job?.status==='failed'?'Calcul interrompu':
+      message?'Revue interrompue':job?.status==='running'?'Analyse en cours':'En file d’attente';
+    const retry=Boolean(message||job?.status==='failed');
+    if(record&&reviewOverview&&$('#review-summary')){
+      ReviewSummary.mount({record,entries,badges,selected:position,select:ply=>{position=ply;displayedGame.position=ply},explore:ply=>switchReview(false,ply),progress:message||progress,retry});
+      return;
+    }
     const panel=$('#game-review');if(!panel)return;
     const e=!replay && forkPosition===null?entries[position-1]:null;
     showVerdict(e);
-    if(!record){panel.hidden=true;return}
-    panel.hidden=false;
-    const progress=job?.status==='complete'?'Revue terminée':job?.status==='failed'?'Calcul interrompu':
-      message?'Revue interrompue':job?.status==='running'?'Analyse en cours':'En file d’attente';
-    ReviewSummary.mount({record,entries,badges,selected:replay?.ply??forkPosition??position,jump,progress:message||progress});
-    const importance=x=>Math.max(x.loss,x.drop*30,x.badge==='brilliant'?6:0);
-    const moments=entries.slice().sort((a,b)=>importance(b)-importance(a)||a.ply-b.ply).slice(0,3);
     const view=replay?entries[replay.ply-1]:e;
-    const chosen=view?`<div class="review-comparison"><b>Coup ${view.ply} · ${moveName(view)}</b>
+    panel.hidden=!record||(!view&&!retry);
+    if(panel.hidden)return;
+    const chosen=view?`<div class="review-comparison">
       <table class="review-values"><caption>Estimations pour ${view.color===1?'Noir':'Blanc'}</caption><thead><tr><th>Coup</th><th>Avance</th><th>Victoire</th></tr></thead>
       <tbody>${(view.best.move===view.played.move?[['Joué · premier choix',view.played]]:[['Joué',view.played],['Conseillé',view.best]]).map(([label,line])=>
         `<tr><th>${label} · ${coord(line.move,record.n)}</th><td>${line.score>0?'+':''}${fmt.format(line.score)} pt</td><td>${fmt.format(line.win*100)} %</td></tr>`).join('')}</tbody></table>
       <div class="actions"><button class="btn" data-grade="line" data-kind="best" data-ply="${view.ply}">Voir ${coord(view.best.move,record.n)}${view.best.move===view.played.move?' · meilleur coup':' · suite conseillée'}</button>
       ${view.best.move!==view.played.move?`<button class="btn" data-grade="line" data-kind="played" data-ply="${view.ply}">Suite du coup joué</button>`:''}
       ${replay?`<button class="btn" data-grade="jump" data-ply="${view.ply}">Revenir au coup joué</button>`:''}</div></div>`:'';
-    panel.innerHTML=`<div class="review-heading"><strong>Revue des coups</strong><span>${entries.length} / ${record.moves.length}</span></div>
-      <p class="review-state" role="status">${safe(message||progress)}</p>
-      ${message||job?.status==='failed'?'<button class="btn" data-grade="retry">Réessayer</button>':''}
-      ${chosen}${moments.length?`<div class="review-moments"><b>Moments clés</b>${moments.map(m=>`<button data-grade="jump" data-ply="${m.ply}"><span>Coup ${m.ply} · ${moveName(m)}</span>${badge(m)}</button>`).join('')}</div>`:''}
-      ${entries.length&&!chosen?'<small>Choisissez un coup avec les flèches ou le curseur.</small>':''}`;
+    panel.innerHTML=`${retry?`<p class="review-state" role="status">${safe(message||progress)}</p><button class="btn" data-grade="retry">Réessayer</button>`:''}${chosen}`;
   }
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-grade]');
@@ -93,7 +84,7 @@ const MoveReview=(()=>{
     const {grade,kind,ply}=button.dataset;
     if(grade==='retry'){begin(record,true);render();return}
     const entry=entries[Number(ply)-1];if(!entry)return;
-    if(grade==='jump'){jump(entry.ply);return}
+    if(grade==='jump'){if(reviewOverview)switchReview(false,entry.ply);else jump(entry.ply);return}
     game=reviewSource;forkPosition=null;replay=null;
     if(grade==='line'){
       position=entry.ply-1;replay={ply:entry.ply};

@@ -11,7 +11,7 @@ let displayedSetup = false;
 function boardShell(){
   if(!$('#board-desk')){
     main.innerHTML=`<section id="board-desk"><div class="desk-grid">
-      <div class="board-column"><div class="seat" id="white-seat"></div><div class="board-wrap"><div class="board" id="live-goban" role="group"></div></div><div class="seat" id="black-seat"></div><div id="move-verdict" hidden></div></div>
+      <div class="board-column"><div class="seat" id="white-seat"></div><div class="board-wrap"><div class="board" id="live-goban" role="group"></div></div><div class="seat" id="black-seat"></div></div>
       <aside class="desk-side" id="desk-tools"></aside></div></section>`;
   }
   return $('#desk-tools');
@@ -27,6 +27,7 @@ function paintBoard(board,n,last=-1,mode='',color=1){
   const el=$('#live-goban');
   el.setAttribute('aria-label',`Goban ${n} × ${n}`);
   el.dataset.turn=color;
+  el.style.setProperty('--intersections',n);
   // Keep the grid and stones mounted when only the available controls change.
   const signature = n + ':' + last + ':' + board.join('');
   if (el.dataset.position !== signature) {
@@ -60,6 +61,20 @@ function gameNavigation(g,index){
   <input id="slider" aria-label="Position dans la partie" type="range" min="0" max="${g.moves.length}" value="${index}">`;
 }
 function drawGame(){
+  if(reviewing && reviewOverview){
+    displayedGame={id:game.id,position};displayedSetup=false;
+    if(main.querySelector('.review-report')?.dataset.record!==game.id){
+      main.innerHTML=`<section class="review-report">
+        <button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>
+        <header class="report-heading"><div><h1 tabindex="-1">Bilan de partie</h1>
+          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div>
+          ${btn('Entrer dans l’analyse','explore-review','analysis',true)}</header>
+        <section id="review-summary" aria-label="Bilan de la partie"></section></section>`;
+      main.querySelector('.review-report').dataset.record=game.id;
+    }
+    MoveReview.render();
+    return;
+  }
   const analysis=reviewing||game.mode==='study', side=boardShell();
   displayedGame={id:game.id,position:forkPosition??position};displayedSetup=false;
   const {states,caps}=makeStates(game),b=states[position],color=turnAt(game,position);
@@ -87,15 +102,19 @@ function drawGame(){
   const score=!analysis&&finished&&!abandoned?Go.score(b,game.n,game.komi):null;
   const info=`<div class="turnline"><i class="seat-stone ${color===2?'white':''}"></i>${status}<small>${game.n} × ${game.n}</small></div>`;
   if(analysis){
-    side.innerHTML=`<div class="panel-head">${icon('analysis')}<h2>${reviewSource?.moves.length?'Bilan de la partie':'Analyse de la partie'}</h2></div>
-      <div class="side-content"><section id="review-summary" hidden></section>${game.title?'<p class="study-label">'+safe(game.title)+'</p>':''}${info}
-      ${gameNavigation(game,position)}
-      <p class="study-label">${forkPosition===null?'Jouez sur le goban pour explorer une suite.':'Variante depuis le coup '+forkPosition+'.'}</p>
-      <div class="actions review-tools">${btn('Passer','pass')}${forkPosition===null?'':btn('Retour à la position initiale','original')}</div>
-      <section id="game-review"></section><section id="local-analysis"></section><div class="actions secondary-actions">
-      ${btn('Enregistrer la variante','branch','plus')}${btn('Bibliothèque','library','book')}</div></div>`;
+    const scroll=side.querySelector('.analysis-body')?.scrollTop||0;
+    side.innerHTML=`<div class="analysis-panel">
+      <header class="analysis-head"><div>${reviewSource?.moves.length?`<button class="review-back" data-action="review-overview">${icon('left',true)} Bilan de partie</button>`:`<button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>`}
+      <h1 tabindex="-1">Analyse des lignes</h1></div><span class="board-size">${game.n} × ${game.n}</span></header>
+      <div class="analysis-position">${info}${gameNavigation(game,position)}</div>
+      <div class="analysis-body"><div id="move-verdict" hidden></div><section id="local-analysis"></section>
+      <section id="game-review"></section></div><footer class="analysis-foot">
+      <p>${forkPosition===null?'Jouez sur le goban pour explorer une suite.':'Variante depuis le coup '+forkPosition+'.'}</p>
+      <div class="actions">${btn('Passer','pass')}${forkPosition===null?'':btn('Revenir au coup '+forkPosition,'original','left')}
+      ${btn('Enregistrer la variante','branch','plus')}${reviewSource?.moves.length?btn('Bibliothèque','library','book'):''}</div></footer></div>`;
     MoveReview.render();
     LocalAnalysis.mount(game,position,states);
+    side.querySelector('.analysis-body').scrollTop=scroll;
     if($('#slider'))$('#slider').oninput=e=>{position=+e.target.value;drawGame();$('#slider').focus()};
   }else{
     const played=game.moves.slice(-6).map((m,i)=>`<span><small>${game.moves.length-Math.min(6,game.moves.length)+i+1}.</small> ${coord(m,game.n)}</span>`).join('');
