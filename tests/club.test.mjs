@@ -66,6 +66,16 @@ test('comptes, invitations, reprise et recherche d’adversaire', async t => {
   assert.deepEqual([first.seat,second.seat].sort(),[1,2]);
   const invite=await b('rooms',{kind:'invite',n:13,ticket:crypto.randomUUID()});
   assert.equal((await a('rooms/'+invite.id+'/join',{})).ready,true);
+  const active='rooms/'+invite.id;
+  const result=await a(active+'/resign',{});
+  assert.equal(result.resigned,2);
+  assert.deepEqual(result.moves,[]);
+  assert.equal((await a(active+'/resign',{})).revision,result.revision);
+  await b(active+'/move',{at:0,p:1},409);
+  await b(active+'/resign',{},409);
+  await b(room+'/resign',{},409);
+  await stop(); await start();
+  assert.equal((await b('club')).rooms.find(g=>g.id===invite.id).resigned,2);
   await otherDevice('logout',{});
   await otherDevice('club',undefined,401);
 });

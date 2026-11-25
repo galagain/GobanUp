@@ -15,6 +15,13 @@
       "when": 1795610379075,
       "tag": "0001_club",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795612258800,
+      "tag": "0002_resignation",
+      "breakpoints": true
     }
   ]
 }

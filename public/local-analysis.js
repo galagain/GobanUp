@@ -4,8 +4,10 @@ const LocalAnalysis = (() => {
   const assets = new URL('katago/', document.baseURI);
   const modelUrl = new URL('g170-b6c96.bin.gz', assets).href;
   const cache = new Map();
+  const signed = new Intl.NumberFormat('fr-FR',{signDisplay:'exceptZero'});
   const colors = [null, 'black', 'white'];
   const number = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:1});
+  const pointNumber = new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
   let worker, current, running = false, enabled = false, ready = false, serial = 0;
   let result, timer, error = '';
   function cancel() {
@@ -16,7 +18,7 @@ const LocalAnalysis = (() => {
   }
   function detach() {
     cancel();
-    resetPreview();
+    document.querySelectorAll('.candidate-pin').forEach(node=>node.remove());
     current = null;
     enabled = false;
     result = null;
@@ -43,8 +45,8 @@ const LocalAnalysis = (() => {
     render();
   }
   function start() {
-    if (!current || !enabled || current.finished) return;
-    if (cache.has(current.key)) {
+    if (!current || !enabled || current.finished || running) return;
+    if (cache.get(current.key)?.complete) {
       result = cache.get(current.key);
       render();
       return;
@@ -84,24 +86,24 @@ const LocalAnalysis = (() => {
     result = {win:a.rootWinRate, score:a.rootScoreLead, visits:a.rootVisits,
       candidates, backend:({webgpu:'WebGPU',wasm:'WebAssembly',cpu:'CPU'})[data.backend]||'local'};
 
-    if (data.type==='katago:analyze_result') {
-      running = false;
-      cache.set(current.key,result);
-      if(cache.size>100) cache.delete(cache.keys().next().value);
-    }
+    result.complete=data.type==='katago:analyze_result';
+    if(result.complete)running=false;
+    cache.set(current.key,result);
+    if(cache.size>100)cache.delete(cache.keys().next().value);
     render();
   }
   function mount(g, index, allStates) {
     const moves = g.moves.slice(0,index);
     const first=g.first||1, komi=g.komi??6.5, rules=g.rules||'chinese';
-    const key = JSON.stringify([g.n,g.start||null,first,komi,rules,moves]);
+    const keyFor = line => JSON.stringify([g.n,g.start||null,first,komi,rules,line]);
+    const key=keyFor(moves);
     if (current?.key===key) {render();return;}
     cancel();
-    current = {key, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
+    current = {key, parentKey:index?keyFor(moves.slice(0,-1)):null, first, komi, rules, n:g.n, states:allStates.slice(0,index+1), moves,
       finished:moves.length>=2 && moves.slice(-2).every(p=>p===-1)};
-    preview=null;error='';result=cache.get(key)||null;
+    error='';result=cache.get(key)||null;
     render();
-    if (enabled && !result) timer=setTimeout(start,130);
+    if (enabled && !result?.complete) timer=setTimeout(start,130);
   }
 
   function pointFromText(text,n){
@@ -130,73 +132,40 @@ const LocalAnalysis = (() => {
     return steps;
   }
   function lead(score){
-    return Math.abs(score)<0.05?'Égalité':`${score>0?'Noir':'Blanc'} +${number.format(Math.abs(score))}`;
+    const cp=Math.round(score*100);
+    return cp===0?'Égalité':`${cp>0?'Noir':'Blanc'} +${pointNumber.format(Math.abs(cp)/100)} pt`;
   }
   const letters='ABC';
-  let preview=null;
-  function rootBoard(){
-    const {states,n,moves,first}=current;
-    const color=(moves.length+first-1)%2+1;
-    paintBoard(states.at(-1),n,moves.at(-1),!reviewing&&game.mode==='study'&&!current.finished?'point':'',color);
-    delete $('#live-goban').dataset.preview;
-  }
-  function see(index,ply){
-    const move=result?.candidates[index];if(!move)return;
-    const line=readLine(move);
-    if(!line.length)return;
-    if(running)cancel();
-    preview={index,ply:Math.max(1,Math.min(line.length,ply)),line};
-    render();
-  }
-  function resetPreview(){
-    if(preview&&current&&$('#live-goban'))rootBoard();
-    preview=null;
+  function enable(){
+    if(!current)return;
+    enabled=true;error='';start();render();
   }
   function control(action){
-    if(action==='run'){
-      enabled=true;error='';start();
-    }else if(action==='stop'){
-      cancel();enabled=false;render();
-    }else if(action==='root'){
-      resetPreview();render();
-    }else if(action.startsWith('show:')){
-      const [,i,ply]=action.split(':');see(+i,+ply);
-    }else if(action==='prev'&&preview){
-      if(preview.ply===1){resetPreview();render()}else see(preview.index,preview.ply-1);
-    }else if(action==='next'&&preview)see(preview.index,preview.ply+1);
+    if(action==='run')enable();
+    if(action==='stop'){cancel();enabled=false;render()}
+    if(action.startsWith('show:')){
+      const [,i,ply]=action.split(':');
+      const move=result?.candidates[Number(i)];
+      if(!move)return;
+      const points=readLine(move).map(step=>step.p);
+      if(points.length)exploreLine(points,Math.min(Number(ply),points.length));
+    }
   }
   function picture(){
     const el=$('#live-goban');if(!el)return;
-    el.querySelectorAll('.candidate-pin,.sequence-number').forEach(node=>node.remove());
-    if(!result)return;
-    if(preview){
-      const step=preview.line[preview.ply-1],n=current.n;
-      paintBoard(step.board,n);
-      el.dataset.preview='true';
-      const numbers=new Map();
-      preview.line.slice(0,preview.ply).forEach((item,index)=>{
-        // Captured or replaced stones must not keep their old move number.
-        for(const p of numbers.keys())if(!item.board[p])numbers.delete(p);
-        if(item.p>=0)numbers.set(item.p,index+1);
-      });
-      for(const [p,value] of numbers){
-        const node=document.createElement('span');node.className='sequence-number '+(step.board[p]===1?'on-black':'on-white')+(value===preview.ply?' last':'');
-        node.style.cssText=hitStyle(p,n);node.textContent=value;node.setAttribute('aria-hidden','true');el.append(node);
-      }
-      return;
-    }
-    result.candidates.forEach((move,i)=>{
+    el.querySelectorAll('.candidate-pin').forEach(node=>node.remove());
+    result?.candidates.forEach((move,i)=>{
       if(move.x<0)return;
-      const p=move.y*current.n+move.x,button=document.createElement('button');
-      button.className='candidate-pin';button.style.cssText=hitStyle(p,current.n);
-      button.dataset.kata=`show:${i}:1`;button.textContent=letters[i];
-      button.setAttribute('aria-label',`Voir la variante ${letters[i]} en ${coord(p,current.n)}`);el.append(button);
+      const p=move.y*current.n+move.x;
+      const pin=document.createElement('span');
+      pin.className='candidate-pin';pin.style.cssText=hitStyle(p,current.n);
+      pin.textContent=letters[i];pin.setAttribute('aria-hidden','true');el.append(pin);
     });
   }
   function candidateRow(m,i){
     const label=m.x<0?'Passe':coord(m.y*current.n+m.x,current.n);
-    const line=readLine(m),active=preview?.index===i;
-    const cells=line.map((step,k)=>`<button data-kata="show:${i}:${k+1}" class="pv-step ${active&&preview.ply===k+1?'chosen':''}" aria-label="Variante ${letters[i]}, coup ${k+1}, ${coord(step.p,current.n)}">${coord(step.p,current.n)}</button>`).join('');
+    const line=readLine(m);
+    const cells=line.map((step,k)=>`<button data-kata="show:${i}:${k+1}" class="pv-step" aria-label="Variante ${letters[i]}, coup ${k+1}, ${coord(step.p,current.n)}">${coord(step.p,current.n)}</button>`).join('');
     let detail='';
     if(line[0]?.captured)detail=`Capture de ${line[0].captured} pierre${line[0].captured>1?'s':''}.`;
     else if(line[0]?.p>=0){
@@ -204,18 +173,26 @@ const LocalAnalysis = (() => {
       const atari=neighbors.some(q=>first.board[q]===3-first.color&&Go.group(first.board,q,current.n).liberties.size===1);
       if(atari)detail=`Un groupe ${first.color===1?'blanc':'noir'} est en atari.`;
     }
-    return `<article class="variation ${active?'selected':''}"><button class="variation-top" data-kata="show:${i}:1" aria-label="Explorer la variante ${letters[i]} en ${label}">
+    return `<article class="variation"><button class="variation-top" data-kata="show:${i}:1" aria-label="Explorer la variante ${letters[i]} en ${label}">
     <span class="letter">${letters[i]}</span><strong>${label}</strong><span class="variation-score">${lead(m.scoreLead)}</span></button>
     <div class="variation-meta"><span>Victoire de Noir · ${number.format(100*m.winRate)} %</span><span>${m.visits} visites</span></div>
     ${detail?'<p class="tactic">'+detail+'</p>':''}<div class="pv-strip">${cells}</div></article>`;
   }
-  function previewControls(){
-    const {index,ply,line}=preview,step=line[ply-1],color=step.color===1?'Noir':'Blanc';
-    const action=step.p<0?'passe':`joue ${coord(step.p,current.n)}`;
-    const capture=step.captured?` et capture ${step.captured} pierre${step.captured>1?'s':''}`:'';
-    return `<section class="line-reader"><div><strong>Variante ${letters[index]}</strong><span>Coup ${ply} sur ${line.length}</span></div>
-    <p>${color} ${action}${capture}.</p><div class="reader-controls"><button aria-label="Coup précédent de la variante" data-kata="prev">${icon('left',true)}</button>
-    <button data-kata="root">Retour à la position</button><button aria-label="Coup suivant de la variante" data-kata="next" ${ply>=line.length?'disabled':''}>${icon('right',true)}</button></div></section>`;
+  function evaluation(){
+    const cp=Math.round(result.score*100);
+    const previous=cache.get(current.parentKey)?.score;
+    const color=turnAt(current,current.moves.length-1);
+    const swing=Number.isFinite(previous)?Math.round((result.score-previous)*100*(color===1?1:-1)):null;
+    const percent=Math.max(0,Math.min(100,result.win*100));
+    const balance=50+Math.max(-1000,Math.min(1000,cp))/20;
+    return `<div class="eval-root"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong></div>
+      <div><small>Évaluation pour Noir</small><strong>${signed.format(cp)} cp</strong></div></div>
+      <div class="score-track" aria-hidden="true"><i style="width:${balance}%"></i></div>
+      <div class="scale-labels" aria-hidden="true"><span>Blanc +10</span><span>0</span><span>Noir +10</span></div>
+      <p class="eval-units">100 centipoints (cp) = 1 point de go. Un signe positif favorise Noir.</p>
+      ${swing===null?'':`<p class="move-swing">Dernier coup · ${signed.format(swing)} cp pour ${color===1?'Noir':'Blanc'}</p>`}
+      <div class="win-caption">Victoire de Noir <b>${number.format(percent)} %</b></div>
+`;
   }
   function render(){
     const panel=$('#local-analysis');
@@ -223,13 +200,10 @@ const LocalAnalysis = (() => {
     picture();
     let content='';
     if(result){
-      const blackPercent=Math.min(100,Math.max(0,result.win*100));
-      content=`<div class="eval-root"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong></div><div><small>Victoire de Noir</small><strong>${number.format(blackPercent)} %</strong></div></div>
-      <div class="eval-track" aria-hidden="true"><i style="width:${blackPercent}%"></i></div>
-      <h3>Lignes du moteur</h3>${result.candidates.map(candidateRow).join('')}${preview?previewControls():''}
+      content=`${evaluation()}<h3>Lignes du moteur</h3>${result.candidates.map(candidateRow).join('')}
       <small class="engine-detail">${result.visits} visites · ${result.backend}</small>`;
     }
-    const status=current.finished?'Deux passes ont terminé la partie. Revenez à un coup précédent.':
+    const status=current.finished?'Deux passes. Jouez une pierre pour explorer une autre suite.':
       error||(running||enabled&&!result?(ready?'Calcul en cours…':'Chargement du moteur…'):result?'':'Modèle local · 3,8 Mo au premier lancement.');
     panel.innerHTML=`<div class="engine-title"><strong>KataGo</strong>${!current.finished&&enabled?'<button class="text-btn" data-kata="stop" aria-label="Désactiver le suivi de l’analyse">Désactiver</button>':''}</div>${content}
     <p class="kata-status" role="status">${status}</p>${!current.finished&&!enabled?`<button class="btn" data-kata="run">${error?'Réessayer':result?'Suivre les coups':'Analyser sur cet appareil'}</button>`:''}`;
@@ -238,11 +212,5 @@ const LocalAnalysis = (() => {
     const button=event.target.closest('[data-kata]');
     if(button)control(button.dataset.kata);
   });
-  document.addEventListener('keydown',event=>{
-    if(!preview||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea,dialog'))return;
-    const action={ArrowLeft:'prev',ArrowRight:'next',Escape:'root'}[event.key];
-    if(action){event.preventDefault();control(action)}
-  });
-  return {mount,detach};
-
+  return {mount,detach,enable};
 })();

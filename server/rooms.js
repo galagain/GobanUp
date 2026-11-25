@@ -3,7 +3,7 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{1
 const json = (value,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
 function visible(row,player) {
   return {id:row.id,kind:row.kind,n:row.size,moves:JSON.parse(row.moves),seat:row.black===player?1:2,
-    black:row.black_name,white:row.white_name,ready:!!row.white,revision:row.revision};
+    black:row.black_name,white:row.white_name,ready:!!row.white,resigned:row.resigned,revision:row.revision};
 }
 async function api(request,db,path,user) {
   const player=user.id;
@@ -24,7 +24,7 @@ async function api(request,db,path,user) {
     const results=await db.batch([...actions,create,find]);const row=results.at(-1).results[0];
     return row?json(visible(row,player)):json({error:'Relancez la recherche.'},409);
   }
-  const match=/^\/api\/rooms\/([a-f0-9-]+)(?:\/(join|move|cancel|decline))?$/.exec(path);
+  const match=/^\/api\/rooms\/([a-f0-9-]+)(?:\/(join|move|cancel|decline|resign))?$/.exec(path);
   if(!match||!uuid.test(match[1]))return json({error:'Salon introuvable.'},404);
   const [,id,action]=match;
   if(action==='decline'&&request.method==='POST'){
@@ -46,10 +46,18 @@ async function api(request,db,path,user) {
     const res=await stmt('DELETE FROM rooms WHERE id=? AND black=? AND white IS NULL',id,player).run();
     return res.meta.changes?json({closed:true}):json({error:'La partie a déjà commencé.'},409);
   }
-  if(action!=='move')return json({error:'Action inconnue.'},400);
   const moves=JSON.parse(row.moves),color=moves.length%2+1;
-  if(body.at!==moves.length||!row.white||(color===1?row.black:row.white)!==player||
-    (moves.length>=2&&moves.slice(-2).every(m=>m===-1)))return json({error:'La position a changé. Actualisation en cours.'},409);
+  const seat=row.black===player?1:2;
+  if(action==='resign' && row.resigned===seat)return json(visible(row,player));
+  if(!row.white || row.resigned || (moves.length>=2 && moves.slice(-2).every(m=>m===-1)))
+    return json({error:'Cette partie n’est pas en cours.'},409);
+  if(action==='resign'){
+    const update=await stmt('UPDATE rooms SET resigned=?,revision=revision+1,touched=? WHERE id=? AND revision=? AND resigned IS NULL',seat,now,id,row.revision).run();
+    if(!update.meta.changes)return json({error:'La position a changé. Réessayez.'},409);
+    return json(visible({...row,resigned:seat,revision:row.revision+1},player));
+  }
+  if(action!=='move')return json({error:'Action inconnue.'},400);
+  if(body.at!==moves.length || color!==seat)return json({error:'La position a changé. Actualisation en cours.'},409);
   const p=body.p;
   if(p!==-1){
     const states=[Array(row.size*row.size).fill(0)];

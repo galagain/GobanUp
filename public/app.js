@@ -48,19 +48,20 @@ const demos=[{id:'opening',title:'Les premiers coups',n:19,moves:[60,300,72,288,
 function gameTitle(g){return g.title||({bot:'Partie rapide',local:'Partie à deux',online:'Partie en ligne',link:'Partie par correspondance'}[g.mode]||'Étude libre')}
 const turnAt=(g,i)=>((g.first===2?1:0)+i)%2+1;
 function makeStates(g){let board=g.start?g.start.slice():Array(g.n*g.n).fill(0);const states=[board],caps=[[0,0]];for(let i=0;i<g.moves.length;i++){let cap=caps[i].slice();if(g.moves[i]!==-1){const r=Go.play(board,g.moves[i],turnAt(g,i),g.n,states);if(!r)throw Error('Coup incorrect');board=r.board;cap[turnAt(g,i)-1]+=r.captured}states.push(board);caps.push(cap)}return {states,caps}}
-const ended=g=>g.moves.length>=2&&g.moves.slice(-2).every(m=>m===-1);
+const twoPasses=(moves,index=moves.length)=>index>=2 && moves[index-1]===-1 && moves[index-2]===-1;
+const ended=g=>Boolean(g.resigned)||twoPasses(g.moves);
+const resignationResult=g=>(g.resigned===1?'Blanc':'Noir')+' gagne par abandon';
 const coord=(p,n)=>p===-1?'Passe':'ABCDEFGHJKLMNOPQRST'[p%n]+(n-Math.floor(p/n));
 function boardSvg(board,n,last=-1,keys=false){const e=boardMargin,side=100,gap=(side-2*e)/(n-1),axis=v=>e+v*gap,rad=gap*.455;let lines='',dots='',stones='',labels='';
 for(let i=0;i<n;i++){const v=axis(i);lines+=`M${v} ${e}V${side-e}M${e} ${v}H${side-e}`;if(keys)labels+=`<text x="${v}" y="3.5">${'ABCDEFGHJKLMNOPQRST'[i]}</text><text x="2.9" y="${v+1.05}">${n-i}</text>`}
 const marks=n===9?[2,4,6]:n===13?[3,6,9]:[3,9,15];for(const i of marks)for(const j of marks)if(n===19||(i===marks[1])===(j===marks[1]))dots+=`<circle cx="${axis(i)}" cy="${axis(j)}" r="${gap*.115}"/>`;
 board.forEach((v,i)=>{if(!v)return;const x=axis(i%n),y=axis(Math.floor(i/n));stones+=`<circle cx="${x+.28}" cy="${y+.5}" r="${rad}" fill="#5b402b66"/><circle cx="${x}" cy="${y}" r="${rad}" fill="${v===1?'url(#stoneB)':'url(#stoneW)'}" stroke="${v===1?'#161714':'#dbd4c4'}" stroke-width=".18"/>`;if(last===i)stones+=`<circle cx="${x}" cy="${y}" r="${rad*.34}" fill="none" stroke="${v===1?'#eee':'#4a493e'}" stroke-width="${gap*.09}"/>`});
 return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="stoneB" cx="34%" cy="24%" r="77%"><stop stop-color="#54554e"/><stop offset=".55" stop-color="#282a26"/><stop offset="1" stop-color="#141513"/></radialGradient><radialGradient id="stoneW" cx="34%" cy="24%" r="77%"><stop stop-color="#fffef6"/><stop offset=".72" stop-color="#f0ecdf"/><stop offset="1" stop-color="#d6d0c0"/></radialGradient></defs><path d="${lines}" fill="none" stroke="#745934" stroke-width="${n===19?.16:.28}"/><g fill="#5d482d">${dots}</g><g fill="#624b36" font-family="sans-serif" font-size="${n===19?2.05:2.55}" text-anchor="middle">${labels}</g>${stones}</svg>`}
-let autoAnalyze=null;
 function launch(g){game=g;if(g.mode==='link')game.seat=1;saveGame();modal.close();location.hash='partie/'+g.id}
 function readGame(id){return games.find(g=>g.id===id)||demos.find(g=>g.id===id)}
-function shareUrl(){const {id,n,moves,opponent}=game;const payload={id,n,moves,opponent:game.seat===1?name:opponent,seat:3-game.seat};return location.href.split('#')[0]+'#invitation/'+encodeURIComponent(JSON.stringify(payload))}
+function shareUrl(){const {id,n,moves,opponent}=game;const payload={id,n,moves,resigned:game.resigned,opponent:game.seat===1?name:opponent,seat:3-game.seat};return location.href.split('#')[0]+'#invitation/'+encodeURIComponent(JSON.stringify(payload))}
 function share(){popup('Transmettre la partie',`<p>Envoyez ce lien à votre partenaire pour qu’il ouvre le goban et joue son coup.</p><label for="url">Lien de la position</label><textarea id="url" readonly rows="3">${safe(shareUrl())}</textarea><div class="actions">${btn('Copier le lien','copy','share',true)}</div>`)}
-function receive(raw){try{const data=JSON.parse(decodeURIComponent(raw));const {id,n,moves,seat}=data;if(!/^[a-f0-9-]{36}$/.test(id)||![9,13,19].includes(n)||![1,2].includes(seat)||!Array.isArray(moves)||moves.length>3000||!moves.every(p=>Number.isInteger(p)&&p>=-1&&p<n*n))throw Error();const old=games.find(g=>g.id===id);let g={id,n,moves,seat,mode:'link',date:Date.now(),opponent:String(data.opponent||'Partenaire').slice(0,32)};makeStates(g);if(old){if(old.mode!=='link'||old.n!==n||!moves.slice(0,Math.min(old.moves.length,moves.length)).every((m,i)=>old.moves[i]===m))throw Error();if(old.moves.length>=moves.length||old.seat!==seat)g=old}game=g;saveGame();location.replace('#partie/'+id)}catch{toast('Ce lien de partie est invalide.');location.replace('#jouer')}}
+function receive(raw){try{const data=JSON.parse(decodeURIComponent(raw));const {id,n,moves,seat}=data;if(!/^[a-f0-9-]{36}$/.test(id)||![9,13,19].includes(n)||![1,2].includes(seat)||!Array.isArray(moves)||moves.length>3000||!moves.every(p=>Number.isInteger(p)&&p>=-1&&p<n*n))throw Error();const old=games.find(g=>g.id===id);let g={id,n,moves,seat,mode:'link',date:Date.now(),opponent:String(data.opponent||'Partenaire').slice(0,32)};if(data.resigned!=null){if(data.resigned!==3-seat||twoPasses(moves))throw Error();g.resigned=data.resigned}makeStates(g);if(old){if(old.mode!=='link'||old.n!==n||!moves.slice(0,Math.min(old.moves.length,moves.length)).every((m,i)=>old.moves[i]===m))throw Error();if(ended(old)||old.moves.length>moves.length||old.moves.length===moves.length&&!g.resigned||old.seat!==seat)g=old}game=g;saveGame();location.replace('#partie/'+id)}catch{toast('Ce lien de partie est invalide.');location.replace('#jouer')}}
 function move(p){const st=makeStates(game).states,color=turnAt(game,game.moves.length);if(ended(game)||reviewing||game.mode==='link'&&game.seat!==color)return;const result=p===-1?null:Go.play(st.at(-1),p,color,game.n,st);if(p!==-1&&!result){toast('Coup interdit sur cette intersection.');return}game.moves.push(p);
 if(game.mode==='bot'&&!ended(game)){const boards=makeStates(game).states,b=boards.at(-1);let best=-Infinity,choice=-1;if(p!==-1){for(let q=0;q<b.length;q++){const r=Go.play(b,q,2,game.n,boards);if(!r)continue;const g=Go.group(r.board,q,game.n);const adj=Go.adjacent(q,game.n);if(adj.every(v=>b[v]===2)&&!r.captured)continue;const score=r.captured*(game.level==='easy'?2:12)+Math.random()*(game.level==='easy'?12:4)+adj.filter(i=>b[i]===1).length*.7+(g.liberties.size===1?-7:0)-Math.abs((q%game.n)-(game.n-1)/2)*.06;if(score>best){best=score;choice=q}}}game.moves.push(choice)}
 position=game.moves.length;saveGame();drawGame()}
@@ -76,7 +77,7 @@ Object.assign(paths,{
 });
 const artTile=(iconName)=>`<span class="mode-art">${icon(iconName)}</span>`;
 function row(g,link){
-  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(g.mode==='online' ? ((g.seat===1?g.white:g.black) ? 'Contre '+(g.seat===1?g.white:g.black) : 'En attente d’un adversaire') : gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups</small></span>${icon('right',true)}</a>`;
+  return `<a class="record" href="#${link}/${g.id}"><span class="record-icon">${icon(g.mode==='bot'?'bot':g.mode==='online'?'globe':'play')}</span><span><strong>${safe(g.mode==='online' ? ((g.seat===1?g.white:g.black) ? 'Contre '+(g.seat===1?g.white:g.black) : 'En attente d’un adversaire') : gameTitle(g))}</strong><small>${g.n} × ${g.n} · ${g.moves.length} coups${g.resigned?' · '+resignationResult(g):''}</small></span>${icon('right',true)}</a>`;
 }
 
 let boardSize=[9,13,19].includes(get('board-size',19))?get('board-size',19):19;
@@ -140,7 +141,7 @@ function library(){
   };
 }
 let setupBoard,brush=1;
-function openSetup(){setupBoard=newGame(displayedGame?readGame(displayedGame.id).n:boardSize,'study','');setupBoard.start=Array(setupBoard.n**2).fill(0);setupBoard.first=1;setupBoard.title='Position libre';brush=1;showSetup()}
+function openSetup(){setupBoard=newGame(readGame(displayedGame?.id)?.n??boardSize,'study','');setupBoard.start=Array(setupBoard.n**2).fill(0);setupBoard.first=1;setupBoard.title='Position libre';brush=1;showSetup()}
 function showSetup(){
   const n=setupBoard.n;
   displayedGame=null;displayedSetup=true;
@@ -198,10 +199,60 @@ async function onlineMove(p){
   catch(err){if(version===routeVersion)toast(err.message)}
   finally{pendingMove=false}
 }
+let reviewSource=null, forkPosition=null;
+function openReview(source,index){
+  reviewing=true;
+  reviewSource=game=source;
+  forkPosition=null;
+  position=index;
+  drawGame();
+  LocalAnalysis.enable();
+}
+function exploreLine(points,ply=points.length){
+  if(!reviewing || !points.length)return;
+  const prefix=game.moves.slice(0,position);
+  const history=makeStates({...game,moves:prefix}).states;
+  for(const p of points){
+    const before=history.at(-1);
+    const next=p===-1?before:Go.play(before,p,turnAt(game,prefix.length),game.n,history)?.board;
+    if(!next){toast('Coup interdit sur cette intersection.');return}
+    prefix.push(p);
+    history.push(next);
+  }
+  const target=position+ply;
+  // Follow an existing continuation without discarding its later moves.
+  if(!points.every((p,i)=>game.moves[position+i]===p)){
+    let common=0;
+    while(common<prefix.length && prefix[common]===reviewSource.moves[common])common++;
+    forkPosition=common===prefix.length?null:common;
+    game=forkPosition===null?reviewSource:{...reviewSource,moves:prefix,resigned:null};
+  }
+  position=target;
+  drawGame();
+}
+function returnToRecord(){
+  position=forkPosition??position;
+  forkPosition=null;game=reviewSource;drawGame();
+}
+async function resign(){
+  if(reviewing||ended(game)||game.mode==='study')return;
+  modal.close();
+  if(game.mode==='online'){
+    const version=routeVersion;
+    try{
+      const updated=await requestRoom('/'+game.id+'/resign',{});
+      if(version===routeVersion)roomView(updated);
+    }catch(err){if(version===routeVersion)toast(err.message)}
+  }else{
+    game.resigned=game.mode==='bot'?1:game.seat||turnAt(game,position);
+    saveGame();drawGame();
+  }
+}
 async function route(){
   LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
   const hadBoard=!!$('#board-desk');
-  activeRoom=null;reviewing=false;
+  const previousReview=reviewSource;
+  activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
   const [key,id]=location.hash.slice(1).split('/');
   const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
   header(tab);
@@ -221,19 +272,23 @@ async function route(){
   else if(key==='partie'||key==='etude'){
     game=readGame(id);if(!game){location.replace('#jouer');return}
     if(game.mode==='online'&&key==='partie'){location.replace('#salon/'+id);return}
-    reviewing=key==='etude';if(game.mode==='study'){header('analyse');main.setAttribute('aria-label','Analyse')}position=reviewing&&ended(game)?game.moves.length-2:game.moves.length;drawGame();
-    if(reviewing||autoAnalyze===game.id){autoAnalyze=null;document.querySelector('[data-kata=run]')?.click()}
+    if(key==='etude'||game.mode==='study'){
+      header('analyse');main.setAttribute('aria-label','Analyse');
+      openReview(game,twoPasses(game.moves)?game.moves.length-2:game.moves.length);
+    }else{position=game.moves.length;drawGame()}
   }else if(key==='amis'){displayedGame=null;displayedSetup=false;friendsPage()}
-  else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)?.ready!==false){
-    game=readGame(displayedGame.id);position=displayedGame.position;reviewing=true;drawGame();
-    document.querySelector('[data-kata=run]')?.click();
+  else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)&&readGame(displayedGame.id).ready!==false){
+    const source=readGame(displayedGame.id);
+    const index=displayedGame.position;
+    openReview(source,twoPasses(source.moves,index)?index-2:index);
   }
   else if(key==='analyse'&&hadBoard&&displayedSetup)showSetup();
-  else if(key==='analyse'||key==='bibliotheque')library();
+  else if(key==='analyse')openReview(newGame(boardSize,'study',''),0);
+  else if(key==='bibliotheque')library();
   else if(key==='position')openSetup();
   else {
     const current=hadBoard&&key==='jouer'&&displayedGame?readGame(displayedGame.id):null;
-    if(current&&current.mode!=='study'&&displayedGame.position===current.moves.length){
+    if(current&&current.mode!=='study'&&(displayedGame.position===current.moves.length||previousReview?.id===current.id)){
       if(current.mode==='online'){location.replace('#salon/'+current.id);return}
       history.replaceState(null,'','#partie/'+current.id);
       game=current;position=current.moves.length;drawGame();
@@ -247,7 +302,7 @@ document.addEventListener('click',async e=>{
   if(button.dataset.size){boardSize=+button.dataset.size;save('board-size',boardSize);lobby();return}
   if(place!==undefined){setupBoard.start[+place]=brush;showSetup();return}
   if(button.dataset.brush!==undefined){brush=+button.dataset.brush;showSetup();return}
-  if(point!==undefined){if(game.mode==='online')await onlineMove(+point);else move(+point);return}
+  if(point!==undefined){if(reviewing)exploreLine([+point]);else if(game.mode==='online')await onlineMove(+point);else move(+point);return}
   if(!action)return;
   const [a,id]=action.split(':');
   switch(a){
@@ -259,13 +314,18 @@ document.addEventListener('click',async e=>{
     case 'add':case 'profile':case 'login':case 'register':case 'logout':case 'unfriend':case 'remove':case 'accept':case 'friend-game':case 'send-game':case 'accept-room':case 'decline-room':await clubAction(a,id);break;
     case 'import':modal.close();$('#sgf-input').click();break;
     case 'setup':location.hash='position';break;
-    case 'finish-setup':autoAnalyze=setupBoard.id;launch(setupBoard);break;
+    case 'finish-setup':launch(setupBoard);break;
     case 'step':position=+id;drawGame();break;
     case 'review':location.hash='etude/'+id;break;
+    case 'original':returnToRecord();break;
     case 'branch':{
-      const g={...game,...newGame(game.n,'study',''),moves:game.moves.slice(0,position),title:'Variante · '+gameTitle(game).replace(/^Variante · /,'')};launch(g);break;
+      const g={...newGame(game.n,'study',''),first:game.first,start:game.start,komi:game.komi,rules:game.rules,
+        moves:game.moves.slice(0,position),title:'Variante · '+gameTitle(game).replace(/^Variante · /,'')};
+      launch(g);break;
     }
-    case 'pass':if(game.mode==='online')await onlineMove(-1);else move(-1);break;
+    case 'resign':popup('Abandonner la partie ?',`<p>Votre adversaire remportera la partie.</p><div class="actions">${btn('Continuer à jouer','close')}${btn('Confirmer l’abandon','confirm-resign')}</div>`);break;
+    case 'confirm-resign':await resign();break;
+    case 'pass':if(reviewing)exploreLine([-1]);else if(game.mode==='online')await onlineMove(-1);else move(-1);break;
     case 'share':share();break;
     case 'copy':{
       const field=$('#url');field.select();try{await navigator.clipboard.writeText(field.value);toast('Lien copié.')}catch{toast('Le lien est sélectionné pour la copie.')}break;
@@ -273,6 +333,12 @@ document.addEventListener('click',async e=>{
     case 'cancel-room':try{await requestRoom('/'+activeRoom.id+'/cancel',{});games=games.filter(g=>g.id!==activeRoom.id);persistGames();location.hash='nouvelle'}catch(err){toast(err.message)}break;
     case 'join':if(!requireAccount(()=>document.querySelector('[data-action=join]')?.click()))return;try{enterRoom(await requestRoom('/'+location.hash.split('/')[1]+'/join',{name}))}catch(err){toast(err.message)}break;
   }
+});
+document.addEventListener('keydown',event=>{
+  if(!reviewing||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;
+  if(event.key==='Escape'&&forkPosition!==null){returnToRecord();return}
+  const step={ArrowLeft:-1,ArrowRight:1}[event.key];
+  if(step){event.preventDefault();position=Math.max(0,Math.min(game.moves.length,position+step));drawGame()}
 });
 window.addEventListener('hashchange',route);bootClub();
 
