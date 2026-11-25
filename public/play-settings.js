@@ -19,7 +19,6 @@ function selectedCadence(){
   }
   return '10+0';
 }
-// The larger marks identify each family. The small clocks show each time control.
 const paceArt={
   Bullet:['bullet','<path class="art-trail" d="m3 19 9-6m-7 12 9-6m-5 10 8-6"/><path fill="currentColor" d="M8 23C13 14 21 6 34 4c-1 12-9 21-19 25l2-7z"/><path class="art-cut" d="M17 23 28 12"/><circle class="art-shine" cx="26" cy="12" r="2"/>'],
   Blitz:['blitz','<path class="art-trail" d="M4 13h7M2 18h5m21 7h6"/><path fill="currentColor" d="M19 4h12L21 15h9L11 33l5-14H9z"/><path class="art-cut" d="m20 8-6 9h5"/>'],
@@ -29,37 +28,36 @@ const paceArt={
 function paceGlyph(picture,viewBox='0 0 36 36'){
   return `<svg aria-hidden="true" focusable="false" viewBox="${viewBox}">${picture}</svg>`;
 }
-function timeGlyph(id){
-  if(id==='none')return paceGlyph('<path d="M12 12c-2.3-3.3-3.8-4.7-6.1-4.7a4.7 4.7 0 1 0 0 9.4c4.7 0 7.5-9.4 12.2-9.4a4.7 4.7 0 0 1 0 9.4c-2.3 0-3.8-1.4-6.1-4.7Z"/>','0 0 24 24');
-  if(id==='custom')return paceGlyph('<path d="M3 7h5m5 0h8M3 17h10m5 0h3"/><circle cx="10.5" cy="7" r="2.4"/><circle cx="15.5" cy="17" r="2.4"/>','0 0 24 24');
-  if(id.endsWith('d')){
-    return paceGlyph(`<rect x="3" y="5" width="14" height="12" rx="2"/><path d="M3 9h14M6 3v4m8-4v4"/><text x="10" y="15.3" text-anchor="middle" stroke="none" fill="currentColor" font-size="7" font-weight="750">${parseInt(id)}</text>`,'0 0 20 20');
-  }
-  const [minutes,increment]=id.split('+').map(Number);
-  return paceGlyph(`<circle cx="9" cy="10" r="6.7"/><path d="M9 5.8V10" transform="rotate(${minutes*6} 9 10)"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/>${increment?'<path class="increment-mark" d="M15.4 12.1v5m-2.5-2.5h5"/>':''}`,'0 0 20 20');
-}
 function cadencePicker(group){
   const choice=selectedCadence();
-  const option=id=>{
+  const option=(id,symbol='')=>{
     const label=Cadences.label(id), display=id.endsWith('d')?label.replace(' / coup',''):label;
-    return `<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" aria-label="${label}" ${choice===id?'checked':''}><span>${timeGlyph(id)}<b>${display}</b></span></label>`;
+    return `<label class="pace-option"><input type="radio" name="pace-${group}" value="${id}" aria-label="${label}" ${choice===id?'checked':''}><span>${symbol}<b>${display}</b></span></label>`;
   };
   const rows=Cadences.groups.map(([title,ids])=>{
     const [family,picture]=paceArt[title];
-    return `<div class="pace-group pace-${family}" role="group" aria-label="${title}"><h3><span class="pace-emblem">${paceGlyph(picture)}</span><span>${title}${family==='daily'?'<small>par coup</small>':''}</span></h3><div>${ids.map(option).join('')}</div></div>`;
+    return `<div class="pace-group pace-${family}" role="group" aria-label="${title}"><h3><span class="pace-emblem">${paceGlyph(picture)}</span><span>${title}${family==='daily'?'<small>par coup</small>':''}</span></h3><div>${ids.map(id=>option(id)).join('')}</div></div>`;
   }).join('');
   const custom=choice!=='none' && !Cadences.groups.some(([,ids])=>ids.includes(choice));
   return `<fieldset class="pace-picker"><legend>Cadence <small>${Cadences.label(choice)}</small></legend>
-    <div class="pace-grid">${rows}</div><div class="pace-shortcuts">${option('none')}<button type="button" class="custom-pace" aria-haspopup="dialog" aria-pressed="${custom}">${timeGlyph('custom')}Personnalisée</button></div></fieldset>`;
+    <div class="pace-grid">${rows}</div><div class="pace-shortcuts">${option('none',icon('infinity'))}<button type="button" class="custom-pace" aria-haspopup="dialog" aria-pressed="${custom}">${icon('sliders')}Personnalisée</button></div></fieldset>`;
 }
 function boardSizeMark(n){
-  const lines={9:2,13:3,19:4}[n];
+  const point=i=>(8+32*i/(n-1)).toFixed(2);
   let grid='';
-  for(let i=1;i<=lines;i++){
-    const p=(3+14*i/(lines+1)).toFixed(1);
-    grid+=`M${p} 3v14M3 ${p}h14`;
+  for(let i=0;i<n;i++){
+    const p=point(i);
+    grid+=`M${p} 8v32M8 ${p}h32`;
   }
-  return paceGlyph(`<rect x="3" y="3" width="14" height="14" rx="1.3"/><path d="${grid}"/>`,'0 0 20 20');
+  return paceGlyph(`<rect x="3" y="5" width="42" height="42" rx="3" fill="#957451"/><rect x="3" y="2" width="42" height="42" rx="3" fill="var(--wood)"/><path d="${grid}" stroke="#7d6343" stroke-width=".55"/><g fill="#533f2c">${boardStars(n,point,.85)}</g>`,'0 0 48 48');
+}
+function boardSizePicker(invitation=false){
+  const choices=[9,13,19].map(n=>{
+    const face=`<span class="format-face">${boardSizeMark(n)}<b>${n} × ${n}</b></span>`;
+    if(invitation)return `<label class="format-choice"><input type="radio" name="friend-size" value="${n}" ${n===boardSize?'checked':''}>${face}</label>`;
+    return `<button class="format-choice" type="button" data-size="${n}" aria-pressed="${n===boardSize}">${face}</button>`;
+  });
+  return `<fieldset class="board-formats${invitation?'':' size-pick'}"><legend>Taille</legend><div class="format-grid">${choices.join('')}</div></fieldset>`;
 }
 function setPace(id){
   save('cadence',id);

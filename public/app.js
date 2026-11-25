@@ -52,9 +52,18 @@ const twoPasses=(moves,index=moves.length)=>index>=2 && moves[index-1]===-1 && m
 const ended=g=>Boolean(g.resigned||g.timedOut)||twoPasses(g.moves);
 const finishResult=g=>((g.resigned||g.timedOut)===1?'Blanc':'Noir')+(g.timedOut?' gagne au temps':' gagne par abandon');
 const coord=(p,n)=>p===-1?'Passe':'ABCDEFGHJKLMNOPQRST'[p%n]+(n-Math.floor(p/n));
-function boardSvg(board,n,last=-1,keys=false){const e=boardMargin,side=100,gap=(side-2*e)/(n-1),axis=v=>e+v*gap,rad=gap*.455;let lines='',dots='',stones='',labels='';
+function boardStars(n,axis,radius){
+  const marks=n===9?[2,4,6]:n===13?[3,6,9]:[3,9,15];
+  let circles='';
+  for(const x of marks)for(const y of marks){
+    if(n===19 || (x===marks[1])===(y===marks[1]))circles+=`<circle cx="${axis(x)}" cy="${axis(y)}" r="${radius}"/>`;
+  }
+  return circles;
+}
+function boardSvg(board,n,last=-1,keys=false){const e=boardMargin,side=100,gap=(side-2*e)/(n-1),axis=v=>e+v*gap,rad=gap*.455;let lines='',stones='',labels='';
+const dots=boardStars(n,axis,gap*.115);
 for(let i=0;i<n;i++){const v=axis(i);lines+=`M${v} ${e}V${side-e}M${e} ${v}H${side-e}`;if(keys)labels+=`<text x="${v}" y="3.5">${'ABCDEFGHJKLMNOPQRST'[i]}</text><text x="2.9" y="${v+1.05}">${n-i}</text>`}
-const marks=n===9?[2,4,6]:n===13?[3,6,9]:[3,9,15];for(const i of marks)for(const j of marks)if(n===19||(i===marks[1])===(j===marks[1]))dots+=`<circle cx="${axis(i)}" cy="${axis(j)}" r="${gap*.115}"/>`;
+
 board.forEach((v,i)=>{if(!v)return;const x=axis(i%n),y=axis(Math.floor(i/n));stones+=`<circle cx="${x+.28}" cy="${y+.5}" r="${rad}" fill="#5b402b66"/><circle cx="${x}" cy="${y}" r="${rad}" fill="${v===1?'url(#stoneB)':'url(#stoneW)'}" stroke="${v===1?'#161714':'#dbd4c4'}" stroke-width=".18"/>`;if(last===i)stones+=`<circle class="last-stone" cx="${x}" cy="${y}" r="${rad*.34}" fill="none" stroke="${v===1?'#eee':'#4a493e'}" stroke-width="${gap*.09}"/>`});
 return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="stoneB" cx="34%" cy="24%" r="77%"><stop stop-color="#54554e"/><stop offset=".55" stop-color="#282a26"/><stop offset="1" stop-color="#141513"/></radialGradient><radialGradient id="stoneW" cx="34%" cy="24%" r="77%"><stop stop-color="#fffef6"/><stop offset=".72" stop-color="#f0ecdf"/><stop offset="1" stop-color="#d6d0c0"/></radialGradient></defs><path d="${lines}" fill="none" stroke="#745934" stroke-width="${n===19?.16:.28}"/><g fill="#5d482d">${dots}</g><g fill="#624b36" font-family="sans-serif" font-size="${n===19?2.05:2.55}" text-anchor="middle">${labels}</g>${stones}</svg>`}
 function launch(g){game=g;if(g.mode==='link')game.seat=1;saveGame();modal.close();location.hash='partie/'+g.id}
@@ -79,6 +88,7 @@ Object.assign(paths,{
  bot:'<rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 7V4m-2 12h4M1.5 11.5v4m21-4v4"/><circle cx="12" cy="3" r="1"/><circle cx="8.5" cy="12" r=".8" fill="currentColor"/><circle cx="15.5" cy="12" r=".8" fill="currentColor"/>',
  file:'<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 15h6m-3-3v6"/>',
  edit:'<path d="M4 5h12M4 10h7M4 15h4m3 5 1-5 7-7 4 4-7 7z"/>',
+ infinity:'<path d="M12 12c-2.3-3.3-3.8-4.7-6.1-4.7a4.7 4.7 0 1 0 0 9.4c4.7 0 7.5-9.4 12.2-9.4a4.7 4.7 0 0 1 0 9.4c-2.3 0-3.8-1.4-6.1-4.7Z"/>',
  sliders:'<path d="M3 7h8m4 0h6M3 17h3m4 0h11"/><circle cx="13" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
  arrow:'<path d="M6 18 18 6M6 6h12v12"/>',
  stones:'<circle cx="9" cy="9" r="6"/><path d="M16 8.5a6 6 0 1 1-7.5 7.5"/>'
@@ -98,7 +108,7 @@ function lobby(keepBoard=false){
   const bot=playTab==='bot', friend=playTab==='invite';
   const target=friend?friendOptions():'';
   const actionLabel=bot?'Jouer contre le bot':friend?(selectedFriend?'Envoyer l’invitation':'Créer un lien d’invitation'):'Trouver un adversaire';
-  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options"><div class="size-pick" role="group" aria-label="Taille du goban"><span>Taille du goban</span><div>${[9,13,19].map(n=>`<button data-size="${n}" aria-pressed="${n===boardSize}">${boardSizeMark(n)}${n} × ${n}</button>`).join('')}</div></div>
+  side.innerHTML=playTabs()+`<div class="side-content play-config">${cadencePicker(playTab)}<div class="play-options">${boardSizePicker()}
     ${bot?`<label for="level">Adversaire</label><select id="level">${BotPlayers.options()}</select><small class="bot-download" id="bot-download" hidden></small><a class="bot-credits" href="bots/sources.html" target="_blank" rel="noopener">Sources des bots</a>`:target}
     </div></div><div class="play-submit">${btn(actionLabel,friend?'challenge':playTab,'right',true)}</div>`;
   if(bot){

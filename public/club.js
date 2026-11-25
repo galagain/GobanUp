@@ -120,7 +120,7 @@ function friendsPage() {
 function challengeDialog(id) {
   const friend=clubState.friends.find(f=>f.id===id);
   if (!friend) return;
-  popup('Inviter '+safe(friend.name),`<fieldset class="friend-sizes"><legend>Taille du goban</legend><div>${[9,13,19].map(n=>`<label class="pace-option"><input type="radio" name="friend-size" value="${n}" ${n===boardSize?'checked':''}><span>${n} × ${n}</span></label>`).join('')}</div></fieldset>${cadencePicker('friend-dialog')}<div class="actions">${btn('Envoyer l’invitation','send-game:'+id,'friends',true)}</div>`);
+  popup('Inviter '+safe(friend.name),`${boardSizePicker(true)}${cadencePicker('friend-dialog')}<div class="actions">${btn('Envoyer l’invitation','send-game:'+id,'friends',true)}</div>`);
 }
 async function clubAction(action,id) {
   try {
