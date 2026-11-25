@@ -7,7 +7,7 @@ const MoveReview=(()=>{
   const fmt=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1});
   let generation=0,timer,job,record,entries=[],message='',replay=null;
   function stop(){
-    generation++;clearTimeout(timer);record=null;job=null;entries=[];message='';replay=null;
+    ReviewSummary.reset();generation++;clearTimeout(timer);record=null;job=null;entries=[];message='';replay=null;
     document.querySelector('.review-mark')?.remove();
     const caption=document.querySelector('#move-verdict');if(caption)caption.hidden=true;
   }
@@ -59,6 +59,9 @@ const MoveReview=(()=>{
     mark.setAttribute('aria-hidden','true');mark.style.cssText=hitStyle(e.played.move,record.n);
     $('#live-goban').append(mark);
   }
+  function jump(ply){
+    game=reviewSource;forkPosition=null;replay=null;position=ply;drawGame();
+  }
   function render(){
     const panel=$('#game-review');if(!panel)return;
     const e=!replay && forkPosition===null?entries[position-1]:null;
@@ -67,6 +70,7 @@ const MoveReview=(()=>{
     panel.hidden=false;
     const progress=job?.status==='complete'?'Revue terminée':job?.status==='failed'?'Calcul interrompu':
       message?'Revue interrompue':job?.status==='running'?'Analyse en cours':'En file d’attente';
+    ReviewSummary.mount({record,entries,badges,selected:replay?.ply??forkPosition??position,jump,progress:message||progress});
     const importance=x=>Math.max(x.loss,x.drop*30,x.badge==='brilliant'?6:0);
     const moments=entries.slice().sort((a,b)=>importance(b)-importance(a)||a.ply-b.ply).slice(0,3);
     const view=replay?entries[replay.ply-1]:e;
@@ -89,8 +93,8 @@ const MoveReview=(()=>{
     const {grade,kind,ply}=button.dataset;
     if(grade==='retry'){begin(record,true);render();return}
     const entry=entries[Number(ply)-1];if(!entry)return;
+    if(grade==='jump'){jump(entry.ply);return}
     game=reviewSource;forkPosition=null;replay=null;
-    if(grade==='jump'){position=entry.ply;drawGame();return}
     if(grade==='line'){
       position=entry.ply-1;replay={ply:entry.ply};
       exploreLine(entry[kind].line,1);

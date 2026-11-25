@@ -87,8 +87,8 @@ function drawGame(){
   const score=!analysis&&finished&&!abandoned?Go.score(b,game.n,game.komi):null;
   const info=`<div class="turnline"><i class="seat-stone ${color===2?'white':''}"></i>${status}<small>${game.n} × ${game.n}</small></div>`;
   if(analysis){
-    side.innerHTML=`<div class="panel-head">${icon('analysis')}<h2>Analyse de la partie</h2></div>
-      <div class="side-content">${game.title?'<p class="study-label">'+safe(game.title)+'</p>':''}${info}
+    side.innerHTML=`<div class="panel-head">${icon('analysis')}<h2>${reviewSource?.moves.length?'Bilan de la partie':'Analyse de la partie'}</h2></div>
+      <div class="side-content"><section id="review-summary" hidden></section>${game.title?'<p class="study-label">'+safe(game.title)+'</p>':''}${info}
       ${gameNavigation(game,position)}
       <p class="study-label">${forkPosition===null?'Jouez sur le goban pour explorer une suite.':'Variante depuis le coup '+forkPosition+'.'}</p>
       <div class="actions review-tools">${btn('Passer','pass')}${forkPosition===null?'':btn('Retour à la position initiale','original')}</div>

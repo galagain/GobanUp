@@ -60,7 +60,7 @@ function importSgf(input, fallbackName) {
   const ru=root.RU?.[0]?.toLowerCase()||'';
   const rules=Object.entries({'japanese':'jap','korean':'kor','aga':'aga','new-zealand':'new zealand','tromp-taylor':'tromp'}).find(([,v])=>ru.startsWith(v))?.[0]||'chinese';
   const komi=Number(root.KM?.[0]??6.5);if(!Number.isFinite(komi))throw Error('Le komi du fichier est invalide.');
-  Object.assign(g,{start,first,komi,rules,title:root.GN?.[0]||(root.PB&&root.PW?`${root.PB[0]} – ${root.PW[0]}`:fallbackName.replace(/\.sgf$/i,''))||'Partie importée'});
+  Object.assign(g,{start,first,komi,rules,black:root.PB?.[0],white:root.PW?.[0],title:root.GN?.[0]||(root.PB&&root.PW?`${root.PB[0]} – ${root.PW[0]}`:fallbackName.replace(/\.sgf$/i,''))||'Partie importée'});
   nodes.forEach((node,index)=>{
     if(index&&(node.AB||node.AW||node.AE||node.PL))throw Error('Ce SGF modifie la position en cours de partie. Importez une ligne de jeu continue.');
     if(!node.B&&!node.W)return;
