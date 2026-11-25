@@ -16,4 +16,4 @@ Dans **Amis**, créez un compte, puis envoyez une demande au pseudo de votre par
 
 **Revoir ma partie** lance KataGo dans un Web Worker du navigateur. Les estimations terminées sont conservées dans IndexedDB et réutilisées à la prochaine ouverture de la même partie sur cet appareil. Le serveur distribue les fichiers du moteur et du modèle.
 
-Le bilan prend la première estimation de chaque position, la partage avec l’analyse interactive et réutilise la position suivante pour noter le coup joué. La courbe conserve une évaluation par coup. Les marqueurs et les moments clés correspondent aux changements significatifs des chances de victoire, confirmés par la comparaison entre le coup joué et la recommandation de KataGo.
+Le bilan évalue la position initiale une fois, puis chaque coup avec un seul passage du réseau. Ce passage produit ensemble le score, les chances de victoire et les préférences de coups. La courbe et les notes utilisent la variation avant et après le coup joué. La recherche de variantes s’effectue dans l’onglet Analyse.

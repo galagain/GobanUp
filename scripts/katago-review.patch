@@ -1,0 +1,78 @@
+diff --git a/src/engine/katago/types.ts b/src/engine/katago/types.ts
+index 6df5a80..8fa89bf 100644
+--- a/src/engine/katago/types.ts
++++ b/src/engine/katago/types.ts
+@@ -164,6 +164,7 @@ export interface KataGoEvalRequest {
+   komi: number;
+   rules?: GameRules;
+   conservativePass?: boolean;
++  includePolicy?: boolean;
+ }
+
+ export interface KataGoEvalResponse {
+@@ -177,6 +178,7 @@ export interface KataGoEvalResponse {
+     rootScoreLead: number;
+     rootScoreSelfplay: number;
+     rootScoreStdev: number;
++    policyLogits?: Float32Array;
+   };
+   error?: string;
+ }
+diff --git a/src/engine/katago/worker.ts b/src/engine/katago/worker.ts
+index 2507cef..4d7a8f6 100644
+--- a/src/engine/katago/worker.ts
++++ b/src/engine/katago/worker.ts
+@@ -483,12 +483,26 @@ async function handleMessage(msg: KataGoWorkerRequest): Promise<void> {
+
+     const spatial = tf.tensor4d(evalSpatialV7, [1, boardSize, boardSize, 22]);
+     const global = tf.tensor2d(evalGlobalV7, [1, 19]);
+-    const out = model.forwardValueOnly(spatial, global);
+-    const [valueLogitsArr, scoreValueArr] = await Promise.all([out.value.data(), out.scoreValue.data()]);
+-    spatial.dispose();
+-    global.dispose();
+-    out.value.dispose();
+-    out.scoreValue.dispose();
++    const policyOut = msg.includePolicy ? model.forwardPolicyValue(spatial, global) : null;
++    const out = policyOut ?? model.forwardValueOnly(spatial, global);
++    let policyLogits: Float32Array | undefined;
++    let valueLogitsArr, scoreValueArr;
++    try {
++      [valueLogitsArr, scoreValueArr] = await Promise.all([out.value.data(), out.scoreValue.data()]);
++      if (policyOut) {
++        const [points, pass] = await Promise.all([policyOut.policy.data(), policyOut.policyPass.data()]);
++        policyLogits = new Float32Array(boardSize * boardSize + 1);
++        for (let p = 0; p < boardSize * boardSize; p++) policyLogits[p] = points[p * model.policyOutChannels]!;
++        policyLogits[boardSize * boardSize] = pass[0]!;
++      }
++    } finally {
++      spatial.dispose();
++      global.dispose();
++      out.value.dispose();
++      out.scoreValue.dispose();
++      policyOut?.policy.dispose();
++      policyOut?.policyPass.dispose();
++    }
+
+     const evaled = postprocessKataGoV8({
+       nextPlayer: msg.currentPlayer,
+@@ -509,6 +523,7 @@ async function handleMessage(msg: KataGoWorkerRequest): Promise<void> {
+         rootScoreLead: evaled.blackScoreLead,
+         rootScoreSelfplay: evaled.blackScoreMean,
+         rootScoreStdev: evaled.blackScoreStdev,
++        policyLogits,
+       },
+     });
+     return;
+diff --git a/src/utils/goRules.ts b/src/utils/goRules.ts
+index 3f9fa4f..2835a94 100644
+--- a/src/utils/goRules.ts
++++ b/src/utils/goRules.ts
+@@ -72,7 +72,7 @@ export const RULES: Record<GameRules, RulesDefinition> = {
+     label: 'Chinese',
+     summary: 'Area scoring, simple ko, White gets a point per handicap stone.',
+     scoring: 'area',
+-    ko: 'simple',
++    ko: 'positional',
+     tax: 'none',
+     multiStoneSuicideLegal: false,
+     hasButton: false,

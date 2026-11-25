@@ -17,5 +17,6 @@ Les trois fichiers tfjs/*.wasm proviennent du dossier dist du backend WASM.
 Le modèle provient de public/models/katago-small.bin.gz à la révision ci-dessus.
 
 Compilation depuis le dossier des sources Web KatRain après installation
-des dépendances et application de l'adaptation ci-dessus :
+des dépendances et application du correctif scripts/katago-review.patch de GobanUp
+(règle de ko et sortie de politique facultative lors d’une inférence unique) :
 esbuild src/engine/katago/worker.ts --bundle --platform=browser --format=iife --minify --legal-comments=eof '--define:import.meta.env.BASE_URL="."' --outfile=analysis-worker.js

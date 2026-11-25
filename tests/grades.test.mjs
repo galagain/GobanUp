@@ -1,63 +1,49 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
-import { evaluatePly,quality,isTurningPoint } from '../public/review-grade.js';
-const Go=runInNewContext(readFileSync('public/engine.js','utf8')+'\nGo');
-const estimate=(score,win,candidates=[])=>({score,win,candidates,visits:4});
-const move=(x,y,scoreLead,winRate,pv,prior=.4)=>({x,y,scoreLead,winRate,pv,visits:3,prior});
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import {evaluatePly,quality} from '../public/review-grade.js';
 
-test('seuils provisoires et chute de victoire dans une position serrée',()=>{
-  assert.deepEqual([0,1,3,6].map(loss=>quality(false,loss,0,0.5)),['good','inaccuracy','inaccuracy','inaccuracy']);
-  assert.equal(quality(true,0,0,0.5),'best');
-  assert.equal(quality(false,2,0.21,0.65),'blunder');
+const Go=runInNewContext(readFileSync('public/engine.js','utf8')+'\nGo');
+const estimate=(score,win,move)=>({score,win,move});
+function grade(g,board,ply,before,after){
+  const states=[board];
+  for(const [i,p] of g.moves.entries()){
+    const color=(g.first-1+i)%2+1;
+    states.push(p<0?states.at(-1):Go.play(states.at(-1),p,color,g.n,states).board);
+  }
+  return evaluatePly({Go,g,states,ply,before,after});
+}
+
+test('évalue la passe de Blanc avec les scores bruts avant et après',()=>{
+  const after=estimate(2,.55,41);
+  const e=grade({n:9,first:2,moves:[-1]},Array(81).fill(0),0,estimate(-3,.35,40),after);
+  assert.equal(e.color,2);assert.equal(e.suggestion,40);assert.equal(e.loss,5);assert.equal(e.drop,.2);
+  assert.equal(e.badge,'blunder');assert.equal(e.turning,true);assert.deepEqual(e.played,{move:-1,score:-2,win:1-.55});
+  assert.deepEqual(e.before,{score:3,win:.65});assert.deepEqual(e.after,after);
 });
-test('note la passe de Blanc depuis la position suivante même si elle manque aux candidats',()=>{
-  const g={n:9,first:2,moves:[-1]};
-  const before=estimate(-3,.35,[move(4,4,-3,.35,['E5'])]);
-  const after=estimate(2,.55,[move(5,4,2,.55,['F5'])]);
-  const grade=evaluatePly({Go,g,ply:0,history:[Array(81).fill(0)],before,after});
-  assert.equal(grade.color,2);assert.equal(grade.loss,5);assert.equal(grade.drop,.2);
-  assert.equal(grade.badge,'blunder');assert.deepEqual(grade.played.line,[-1,41]);
-  assert.deepEqual(grade.before,{win:.65,score:3});
+test('conserve la préférence du réseau et note la position réellement obtenue',()=>{
+  const g={n:9,first:1,moves:[-1,-1]},board=Array(81).fill(0);
+  const e=grade(g,board,1,estimate(1,.55,-1),estimate(1,.55,40));
+  assert.equal(e.badge,'best');assert.equal(e.loss,0);assert.equal(e.played.move,-1);
+  assert.equal(quality(true,5,.25,.65),'blunder');
 });
-test('la seconde passe termine la variante et garde le score de la position finale',()=>{
-  const g={n:9,first:1,moves:[-1,-1]};
-  const before=estimate(1,.55,[move(-1,-1,1,.55,['pass','E5'])]);
-  const after=estimate(2,.65,[move(4,4,2,.65,['E5'])]);
-  const board=Array(81).fill(0);
-  const grade=evaluatePly({Go,g,ply:1,history:[board,board],before,after});
-  assert.equal(grade.badge,'best');assert.equal(grade.loss,0);assert.equal(grade.played.score,-2);
-  assert.deepEqual(grade.played.line,[-1]);assert.deepEqual(grade.best.line,[-1]);
-});
-test('occasion manquée confirmée par la réponse qui sauve les pierres',()=>{
+test('une capture manquée exige une réponse réelle qui sauve les pierres',()=>{
   const board=Array(81).fill(0);board[0]=board[1]=2;board[9]=board[10]=1;
-  const g={n:9,first:1,moves:[40]};
-  const before=estimate(2,.60,[move(2,0,2,.60,['C9'])]);
-  const after=estimate(-2,.44,[move(2,0,-2,.44,['C9'])]);
-  const grade=evaluatePly({Go,g,ply:0,history:[board],before,after});
-  assert.equal(grade.badge,'missed');assert.match(grade.explanation,/2 pierres/);
+  const g={n:9,first:1,moves:[40,2]};
+  const before=estimate(2,.61,2),after=estimate(-2,.43,2);
+  assert.equal(grade(g,board,0,before,after).badge,'missed');
+  assert.equal(grade({...g,moves:[40]},board,0,before,after).badge,'mistake');
 });
-test('sacrifice rare visible dès la première variante',()=>{
+test('un sacrifice brillant est vérifié sur les coups de la partie',()=>{
   const board=Array(361).fill(0);
   for(const p of [0,7,27,28,29])board[p]=1;
   for(const p of [19,2,8,9,10])board[p]=2;
-  const g={n:19,first:1,moves:[1]};
-  const best=move(1,0,4,.7,['B19','B18','M19'],.008);
-  best.visits=22;
-  const second={...move(11,0,0,.5,['M19']),visits:12};
-  const before=estimate(4,.7,[best,second]),after=estimate(4,.7);
-  assert.equal(evaluatePly({Go,g,ply:0,history:[board],before,after}).badge,'brilliant');
-  best.prior=.4;
-  assert.equal(evaluatePly({Go,g,ply:0,history:[board],before,after}).badge,'best');
+  const g={n:19,first:1,moves:[1,20,11]},before=estimate(1,.5,11),after=estimate(4,.7,20);
+  assert.equal(grade(g,board,0,before,after).badge,'brilliant');
+  assert.equal(grade({...g,moves:[1]},board,0,before,after).badge,'good');
 });
-test('marque les bascules visibles depuis la couleur du joueur et ignore les positions stables',()=>{
-  const e={badge:'blunder',color:2,loss:4,best:{win:.67,visits:24},played:{win:.38,visits:24},drop:.29};
-  assert.equal(isTurningPoint(e,{color:1,played:{win:.34}}),true);
-  assert.equal(isTurningPoint(e,{color:1,played:{win:.62}}),false);
-  assert.equal(isTurningPoint({...e,badge:'best'},undefined),false);
-  assert.equal(isTurningPoint({...e,played:{win:.38,visits:4}},undefined),true);
-  assert.equal(isTurningPoint({...e,loss:.4,played:{win:.38,visits:4}},undefined),false);
-  assert.equal(quality(false,9,.02,.99),'inaccuracy');
-  assert.equal(quality(false,8,.01,.03),'inaccuracy');
+test('ignore les pertes de points qui laissent la situation stable sur la courbe',()=>{
+  const e=grade({n:9,first:1,moves:[40]},Array(81).fill(0),0,estimate(25,.99,41),estimate(16,.97,39));
+  assert.equal(e.badge,'inaccuracy');assert.equal(e.turning,false);
 });

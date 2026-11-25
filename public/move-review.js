@@ -53,25 +53,24 @@ const MoveReview=(()=>{
     panel.hidden=!record||(!view&&!retry);
     if(panel.hidden)return;
     const chosen=view?`<div class="review-comparison">
-      <table class="review-values"><caption>Estimations pour ${view.color===1?'Noir':'Blanc'}</caption><thead><tr><th>Coup</th><th>Avance</th><th>Victoire</th></tr></thead>
-      <tbody>${(view.best.move===view.played.move?[['Joué · premier choix',view.played]]:[['Joué',view.played],['Conseillé',view.best]]).map(([label,line])=>
-        `<tr><th>${label} · ${coord(line.move,record.n)}</th><td>${line.score>0?'+':''}${fmt.format(line.score)} pt</td><td>${fmt.format(line.win*100)} %</td></tr>`).join('')}</tbody></table>
-      <div class="actions"><button class="btn" data-grade="line" data-kind="best" data-ply="${view.ply}">Voir ${coord(view.best.move,record.n)}${view.best.move===view.played.move?' · meilleur coup':' · suite conseillée'}</button>
-      ${view.best.move!==view.played.move?`<button class="btn" data-grade="line" data-kind="played" data-ply="${view.ply}">Suite du coup joué</button>`:''}
+      <table class="review-values"><caption>Estimations pour ${view.color===1?'Noir':'Blanc'}</caption><thead><tr><th>Position</th><th>Avance</th><th>Victoire</th></tr></thead>
+      <tbody>${[['Avant le coup',view.before],['Après '+moveName(view),view.played]].map(([label,line])=>
+        `<tr><th>${label}</th><td>${line.score>0?'+':''}${fmt.format(line.score)} pt</td><td>${fmt.format(line.win*100)} %</td></tr>`).join('')}</tbody></table>
+      <div class="actions">${view.suggestion!==view.played.move?`<button class="btn" data-grade="line" data-ply="${view.ply}">Explorer ${coord(view.suggestion,record.n)} · choix du modèle</button>`:''}
       ${replay?`<button class="btn" data-grade="jump" data-ply="${view.ply}">Revenir au coup joué</button>`:''}</div></div>`:'';
     panel.innerHTML=`${retry?`<p class="review-state" role="status">${safe(message||progress)}</p><button class="btn" data-grade="retry">Réessayer</button>`:''}${chosen}`;
   }
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-grade]');
     if(!button||!record)return;
-    const {grade,kind,ply}=button.dataset;
+    const {grade,ply}=button.dataset;
     if(grade==='retry'){begin(record);render();return}
     const entry=entries[Number(ply)-1];if(!entry)return;
     if(grade==='jump'){if(reviewOverview)switchReview(false,entry.ply);else jump(entry.ply);return}
     game=reviewSource;forkPosition=null;replay=null;
     if(grade==='line'){
       position=entry.ply-1;replay={ply:entry.ply};
-      exploreLine(entry[kind].line,1);
+      exploreLine([entry.suggestion],1);
     }
   });
   function manual(){replay=null}

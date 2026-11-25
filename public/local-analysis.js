@@ -33,18 +33,15 @@ const LocalAnalysis = (() => {
     }
     return key;
   }
-  function analysisPayload(g,states,moves){
+  function positionInputs(g,states){
     const n=g.n;
-    return {
-      type:'katago:analyze',
-      modelUrl, board:rows(states.at(-1), n), previousBoard:rows(states.at(-2), n),
-      previousPreviousBoard:rows(states.at(-3), n), currentPlayer:colors[turnAt(g,moves.length)],
-      moveHistory:moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[turnAt(g,i)]})),
-      repetitionHistory:states.map((board,i)=>repetitionKey(board,i+(g.first||1)-1,n)),
-      komi:g.komi??6.5, rules:g.rules||'chinese', backend:'webgpu', visits:180, maxTimeMs:6500,
-      topK:3, analysisPvLen:10, ownershipMode:'none', wideRootNoise:0,
-      reportDuringSearchEveryMs:600
-    };
+    const moves=g.moves.map((p,i)=>({x:p<0?-1:p%n,y:p<0?-1:Math.floor(p/n),player:colors[turnAt(g,i)]}));
+    const repetitions=states.map((board,i)=>repetitionKey(board,i+(g.first||1)-1,n));
+    return ply=>({
+      modelUrl,backend:'webgpu',komi:g.komi??6.5,rules:g.rules||'chinese',
+      board:rows(states[ply],n),previousBoard:rows(states[ply-1],n),previousPreviousBoard:rows(states[ply-2],n),
+      currentPlayer:colors[turnAt(g,ply)],moveHistory:moves.slice(0,ply),repetitionHistory:repetitions.slice(0,ply+1)
+    });
   }
   function badWorker() {
     worker?.terminate();
@@ -70,7 +67,9 @@ const LocalAnalysis = (() => {
         worker.onmessageerror = badWorker;
         worker.onmessage = receive;
       }
-      const payload={...analysisPayload(current,current.states,current.moves),id:++serial,analysisGroup:'interactive'};
+      const inputs=positionInputs(current,current.states);
+      const payload={...inputs(current.moves.length),type:'katago:analyze',id:++serial,analysisGroup:'interactive',
+        visits:180,maxTimeMs:6500,topK:3,analysisPvLen:10,ownershipMode:'none',wideRootNoise:0,reportDuringSearchEveryMs:600};
       running = true;
       worker.postMessage(payload);
       render();
@@ -100,12 +99,19 @@ const LocalAnalysis = (() => {
     cache.set(key,value);
     if(cache.size>100)cache.delete(cache.keys().next().value);
   }
-  function firstEstimate(key){return cache.get(key)?.first}
-  function rememberEstimate(key,estimate){
-    const existing=firstEstimate(key);
-    if(existing)return existing;
-    remember(key,{...estimate,first:estimate,complete:false});
-    return estimate;
+  function rawEstimate(key){return cache.get(key)?.raw}
+  function rememberRaw(key,raw){
+    const existing=cache.get(key);
+    if(existing?.raw)return existing.raw;
+    remember(key,{...(existing||{score:raw.score,win:raw.win,visits:0,candidates:[],complete:false,backend:'local'}),raw});
+    return raw;
+  }
+  function policyMove(weights,board,n,color,history){
+    const pass=n*n;
+    if(weights?.length!==pass+1)throw Error('Suggestions du modèle indisponibles.');
+    const ranked=Array.from(weights.keys()).sort((a,b)=>weights[b]-weights[a]);
+    const p=ranked.find(p=>p===pass||Go.play(board,p,color,n,history));
+    return p===pass?-1:p;
   }
   function receive({data}) {
     if (data.id!==serial || !current || data.canceled) return;
@@ -113,7 +119,12 @@ const LocalAnalysis = (() => {
     if (!data.analysis) return;
     ready = true;
     const value=snapshot(data.analysis,current,current.states,current.moves,data.backend);
-    result={...value,first:firstEstimate(current.key)||value,complete:data.type==='katago:analyze_result'};
+    let raw=rawEstimate(current.key);
+    const a=data.analysis;
+    if(!raw && Number.isFinite(a.rawScoreLead) && Number.isFinite(a.rawWinRate) && a.policy?.length===current.n**2+1){
+      raw={score:a.rawScoreLead,win:a.rawWinRate,move:policyMove(a.policy,current.states.at(-1),current.n,turnAt(current,current.moves.length),current.states)};
+    }
+    result={...value,raw,complete:data.type==='katago:analyze_result'};
     if(result.complete)running=false;
     remember(current.key,result);
     render();
@@ -228,5 +239,5 @@ const LocalAnalysis = (() => {
     const button=event.target.closest('[data-kata]');
     if(button)control(button.dataset.kata);
   });
-  return {mount,detach,enable,analysisPayload,positionKey,snapshot,firstEstimate,rememberEstimate};
+  return {mount,detach,enable,positionInputs,positionKey,rawEstimate,rememberRaw,policyMove};
 })();

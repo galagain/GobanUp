@@ -1,4 +1,4 @@
-import {evaluatePly,isTurningPoint} from './review-grade.js';
+import {evaluatePly} from './review-grade.js';
 
 let database;
 function openCache(){
@@ -23,7 +23,7 @@ async function cacheRequest(mode,operation){
     });
   }catch{/* A browser with storage disabled can still run a review. */}
 }
-function workerSearch(worker,payload,signal){
+function workerEval(worker,payload,signal){
   signal.throwIfAborted();
   return new Promise((resolve,reject)=>{
     const abort=()=>finish(reject,signal.reason);
@@ -35,15 +35,11 @@ function workerSearch(worker,payload,signal){
     worker.onerror=worker.onmessageerror=()=>finish(reject,Error('Moteur local indisponible.'));
     worker.onmessage=({data})=>{
       if(data.id!==payload.id)return;
-      if(data.type!=='katago:analyze_update'&&data.type!=='katago:analyze_result')return;
-      if(data.ok && data.analysis){
-        if(data.type==='katago:analyze_update'){
-          if(!data.analysis.moves.some(m=>m.visits>0))return;
-          worker.postMessage({type:'katago:cancel',analysisGroup:payload.analysisGroup,id:payload.id});
-        }
-        finish(resolve,data);
-      }
-      else finish(reject,Error('Calcul local interrompu.'));
+      if(data.type!=='katago:eval_result')return;
+      const value=data.eval;
+      if(data.ok && Number.isFinite(value?.rootScoreLead) && Number.isFinite(value?.rootWinRate)){
+        finish(resolve,value);
+      }else finish(reject,Error('Évaluation locale indisponible.'));
     };
     signal.addEventListener('abort',abort,{once:true});
     worker.postMessage(payload);
@@ -54,7 +50,7 @@ export async function reviewGame(source,scope,signal,publish){
   const g={...source,first:source.first||1};
   const identity=JSON.stringify([scope,g.n,g.first,g.komi??6.5,g.rules||'chinese',g.start||null,g.moves]);
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(identity));
-  const key='v1-'+Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+  const key='raw-v1-'+Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
   const stored=await cacheRequest('readonly',store=>store.getAll(IDBKeyRange.bound([key,1],[key,g.moves.length])));
   const entries=[];
   for(const e of stored||[]){if(e.ply!==entries.length+1)break;entries.push(e)}
@@ -62,27 +58,24 @@ export async function reviewGame(source,scope,signal,publish){
   publish(entries);
   if(entries.length===g.moves.length)return;
   const {states}=makeStates(g);
-  let worker,id=0;
+  const inputs=LocalAnalysis.positionInputs(g,states);
+  let worker;
   async function estimate(ply){
     signal.throwIfAborted();
-    const moves=g.moves.slice(0,ply),key=LocalAnalysis.positionKey(g,moves);
-    const cached=LocalAnalysis.firstEstimate(key);
+    const key=LocalAnalysis.positionKey(g,g.moves.slice(0,ply));
+    const cached=LocalAnalysis.rawEstimate(key);
     if(cached)return cached;
-    worker??=new Worker(new URL('katago/analysis-worker.js',document.baseURI),{name:'KataGo · bilan'});
-    const history=states.slice(0,ply+1);
-    const payload=LocalAnalysis.analysisPayload(g,history,moves);
-    // Stop at the first reporting interval used by the interactive analysis.
-    const data=await workerSearch(worker,{...payload,analysisGroup:'review',id:++id,maxTimeMs:payload.reportDuringSearchEveryMs},signal);
-    const first=LocalAnalysis.snapshot(data.analysis,g,history,moves,data.backend);
-    return LocalAnalysis.rememberEstimate(key,first);
+    worker??=new Worker(new URL('katago/analysis-worker.js?policy=1',document.baseURI),{name:'KataGo · bilan'});
+    const value=await workerEval(worker,{...inputs(ply),type:'katago:eval',includePolicy:true,id:ply},signal);
+    const move=LocalAnalysis.policyMove(value.policyLogits,states[ply],g.n,turnAt(g,ply),states.slice(0,ply+1));
+    return LocalAnalysis.rememberRaw(key,{win:value.rootWinRate,score:value.rootScoreLead,move});
   }
   try{
-    let before=await estimate(entries.length);
+    let before=entries.at(-1)?.after??await estimate(0);
     for(let ply=entries.length;ply<g.moves.length;ply++){
       const after=await estimate(ply+1);
       signal.throwIfAborted();
-      const entry=evaluatePly({Go,g,ply,history:states.slice(0,ply+1),before,after});
-      entry.turning=isTurningPoint(entry,entries.at(-1));
+      const entry=evaluatePly({Go,g,states,ply,before,after});
       entries.push(entry);
       before=after;
       await cacheRequest('readwrite',store=>store.put(entry,[key,entry.ply]));
