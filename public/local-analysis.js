@@ -187,7 +187,6 @@ const LocalAnalysis = (() => {
   }
   function control(action){
     if(action==='run')enable();
-    if(action==='stop'){cancel();enabled=false;render()}
     if(action.startsWith('show:')){
       const [,i,ply]=action.split(':');
       const move=result?.candidates[Number(i)];
@@ -215,29 +214,24 @@ const LocalAnalysis = (() => {
       const label=coord(p,current.n);
       return `<button class="pv-step" data-kata="show:${i}:${k+1}" aria-label="Variante ${letter}, coup ${k+1}, ${label}">${label}</button>`;
     }).join('');
-    return `<div class="candidate-line" role="group" aria-label="Variante ${letter}"><span class="line-letter" aria-hidden="true">${letter}</span><div class="line-moves">${moves}</div></div>`;
+    const evaluated=candidate.visits>0 && Number.isFinite(candidate.scoreLead);
+    const score=evaluated?lead(candidate.scoreLead):'—';
+    return `<div class="candidate-line" role="group" aria-label="Variante ${letter}"><span class="line-letter" aria-hidden="true">${letter}</span><div class="line-moves">${moves}</div><span class="line-score"><span class="sr-only">Évaluation de la ligne : </span>${score}</span></div>`;
   }
   function evaluation(){
     const percent=Math.max(0,Math.min(100,result.win*100));
-    return `<div class="position-estimate"><div><small>Avance estimée</small><strong>${lead(result.score)}</strong>
-      </div>
-      <div><small>Victoire de Noir</small><strong>${number.format(percent)} %</strong>
-      <div class="win-track" aria-hidden="true"><i style="width:${percent}%"></i></div></div></div>`;
-
+    return `<span class="position-lead">${lead(result.score)}</span><span class="position-odds">Victoire de Noir <b>${number.format(percent)} %</b></span>`;
   }
   function render(){
     const panel=$('#local-analysis');
     if(!panel||!current)return;
     picture();
-    let content='';
-    if(result){
-      content=`${evaluation()}<h3>Lignes du moteur</h3>${result.candidates.map(candidateRow).join('')}
-      <small class="engine-detail">${result.visits} visites · ${result.backend}</small>`;
-    }
-    const status=current.finished?'Deux passes.':
-      error||(running||enabled&&!result?(ready?'Calcul en cours…':'Chargement du moteur…'):result?'':'');
-    panel.innerHTML=`<div class="engine-title"><strong>KataGo</strong>${!current.finished&&enabled?'<button class="text-btn" data-kata="stop" aria-label="Désactiver le suivi de l’analyse">Désactiver</button>':''}</div>${content}
-    <p class="kata-status" role="status">${status}</p>${!current.finished&&!enabled?`<button class="btn" data-kata="run">${error?'Réessayer':result?'Suivre les coups':'Analyser sur cet appareil'}</button>`:''}`;
+    $('#position-estimate').innerHTML=result?evaluation():'';
+    const lines=result?.candidates.map(candidateRow).join('');
+    const status=error || (current.finished?'Deux passes.':enabled&&!lines?(ready?'Calcul en cours…':'Chargement du moteur…'):'');
+    panel.innerHTML=`${lines?`<h3>Lignes du moteur</h3>${lines}`:''}
+    ${status?`<p class="kata-status" role="status">${status}</p>`:''}
+    ${!current.finished&&!enabled?`<button class="btn" data-kata="run">${error?'Réessayer':result?'Suivre les coups':'Analyser sur cet appareil'}</button>`:''}`;
   }
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-kata]');

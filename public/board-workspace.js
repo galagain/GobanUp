@@ -58,7 +58,7 @@ function panelForCurrentBoard(){
 }
 function gameNavigation(g,index){
   const steps=[['first','Premier coup',0],['left','Coup précédent',Math.max(0,index-1)],['right','Coup suivant',Math.min(g.moves.length,index+1)],['last','Dernier coup',g.moves.length]];
-  return `<div class="review-nav"><span>${forkPosition===null?'Partie':'Variante'} · ${index} / ${g.moves.length}</span><div>${steps.map(([i,label,d])=>`<button aria-label="${label}" data-action="step:${d}" ${d===index?'disabled':''}>${icon(i,true)}</button>`).join('')}</div></div>`;
+  return `<div class="review-nav" role="group" aria-label="Navigation entre les coups">${steps.map(([i,label,d])=>`<button aria-label="${label}" data-action="step:${d}" ${d===index?'disabled':''}>${icon(i,true)}</button>`).join('')}</div>`;
 }
 function reviewHeading(overview){
   const recorded=Boolean(reviewSource?.moves.length);
@@ -116,10 +116,9 @@ function drawGame(){
     side.innerHTML=`<div class="analysis-panel">
       <div class="analysis-body">${reviewHeading(false)}
       ${reviewSource?.moves.length?'<section id="review-summary" aria-label="Courbe de la partie"></section>':''}
-      <div class="analysis-position">${info}${gameNavigation(game,position)}</div>
+      <div class="analysis-toolbar"><div id="position-estimate"></div>${gameNavigation(game,position)}</div>
       <div id="move-verdict" hidden></div><section id="local-analysis"></section>
       <section id="game-review"></section></div><footer class="analysis-foot">
-      ${forkPosition===null?'':'<p>Variante depuis le coup '+forkPosition+'</p>'}
       <div class="actions">${btn('Passer','pass')}${forkPosition===null?'':btn('Revenir au coup '+forkPosition,'original','left')}
       ${btn('Enregistrer la variante','branch','plus')}</div></footer></div>`;
     MoveReview.render();
