@@ -207,21 +207,15 @@ const LocalAnalysis = (() => {
       pin.textContent=letters[i];pin.setAttribute('aria-hidden','true');el.append(pin);
     });
   }
-  function candidateRow(m,i){
-    const label=m.x<0?'Passe':coord(m.y*current.n+m.x,current.n);
-    const line=readLine(m);
-    const cells=line.map((step,k)=>`<button data-kata="show:${i}:${k+1}" class="pv-step" aria-label="Variante ${letters[i]}, coup ${k+1}, ${coord(step.p,current.n)}">${coord(step.p,current.n)}</button>`).join('');
-    let detail='';
-    if(line[0]?.captured)detail=`Capture de ${line[0].captured} pierre${line[0].captured>1?'s':''}.`;
-    else if(line[0]?.p>=0){
-      const first=line[0], neighbors=Go.adjacent(first.p,current.n);
-      const atari=neighbors.some(q=>first.board[q]===3-first.color&&Go.group(first.board,q,current.n).liberties.size===1);
-      if(atari)detail=`Un groupe ${first.color===1?'blanc':'noir'} est en atari.`;
-    }
-    return `<article class="variation"><button class="variation-top" data-kata="show:${i}:1" aria-label="Explorer la variante ${letters[i]} en ${label}">
-    <span class="letter">${letters[i]}</span><strong>${label}</strong><span class="variation-score">${lead(m.scoreLead)}</span></button>
-    <div class="variation-meta"><span>Victoire de Noir · ${number.format(100*m.winRate)} %</span><span>${m.visits} visites</span></div>
-    ${detail?'<p class="tactic">'+detail+'</p>':''}<div class="pv-strip">${cells}</div></article>`;
+  function candidateRow(candidate,i){
+    const line=readLine(candidate);
+    if(!line.length)return '';
+    const letter=letters[i];
+    const moves=line.map(({p},k)=>{
+      const label=coord(p,current.n);
+      return `<button class="pv-step" data-kata="show:${i}:${k+1}" aria-label="Variante ${letter}, coup ${k+1}, ${label}">${label}</button>`;
+    }).join('');
+    return `<div class="candidate-line" role="group" aria-label="Variante ${letter}"><span class="line-letter" aria-hidden="true">${letter}</span><div class="line-moves">${moves}</div></div>`;
   }
   function evaluation(){
     const percent=Math.max(0,Math.min(100,result.win*100));

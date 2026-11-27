@@ -58,8 +58,7 @@ function panelForCurrentBoard(){
 }
 function gameNavigation(g,index){
   const steps=[['first','Premier coup',0],['left','Coup précédent',Math.max(0,index-1)],['right','Coup suivant',Math.min(g.moves.length,index+1)],['last','Dernier coup',g.moves.length]];
-  return `<div class="review-nav"><span>${forkPosition===null?'Partie':'Variante'} · ${index} / ${g.moves.length}</span><div>${steps.map(([i,label,d])=>`<button aria-label="${label}" data-action="step:${d}" ${d===index?'disabled':''}>${icon(i,true)}</button>`).join('')}</div></div>
-  <input id="slider" aria-label="Position dans la partie" type="range" min="0" max="${g.moves.length}" value="${index}">`;
+  return `<div class="review-nav"><span>${forkPosition===null?'Partie':'Variante'} · ${index} / ${g.moves.length}</span><div>${steps.map(([i,label,d])=>`<button aria-label="${label}" data-action="step:${d}" ${d===index?'disabled':''}>${icon(i,true)}</button>`).join('')}</div></div>`;
 }
 function reviewHeading(overview){
   const recorded=Boolean(reviewSource?.moves.length);
@@ -126,7 +125,6 @@ function drawGame(){
     MoveReview.render();
     LocalAnalysis.mount(game,position,states);
     side.querySelector('.analysis-body').scrollTop=scroll;
-    if($('#slider'))$('#slider').oninput=e=>{position=+e.target.value;drawGame();$('#slider').focus()};
   }else{
     const engineTurn=game.mode==='bot' && BotPlayers.external(game.level) && !finished && color===2;
     const played=game.moves.slice(-6).map((m,i)=>`<span><small>${game.moves.length-Math.min(6,game.moves.length)+i+1}.</small> ${coord(m,game.n)}</span>`).join('');

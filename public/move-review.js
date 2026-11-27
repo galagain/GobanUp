@@ -63,10 +63,9 @@ const MoveReview=(()=>{
     drawGame();
   }
   function render(){
-    const progress=message||((record&&entries.length===record.moves.length)?'Revue terminée':'Analyse sur cet appareil');
     const retry=Boolean(message);
     if(record && $('#review-summary')){
-      ReviewSummary.mount({record,entries,badges,selected:Math.min(position,forkPosition??position),select:jump,explore:ply=>reviewOverview?switchReview(false,ply):jump(ply),progress:message||progress,retry});
+      ReviewSummary.mount({record,entries,badges,selected:Math.min(position,forkPosition??position),select:jump,explore:ply=>reviewOverview?switchReview(false,ply):jump(ply),error:message});
       if(reviewOverview)return;
     }
     const panel=$('#game-review');if(!panel)return;
@@ -81,7 +80,7 @@ const MoveReview=(()=>{
         `<tr><th>${label}</th><td>${line.score>0?'+':''}${fmt.format(line.score)} pt</td><td>${fmt.format(line.win*100)} %</td></tr>`).join('')}</tbody></table>
       <div class="actions">${view.suggestion!==view.played.move?`<button class="btn" data-grade="line" data-ply="${view.ply}">Explorer ${coord(view.suggestion,record.n)} · choix du modèle</button>`:''}
       ${replay?`<button class="btn" data-grade="jump" data-ply="${view.ply}">Revenir au coup joué</button>`:''}</div></div>`:'';
-    panel.innerHTML=`${retry?`<p class="review-state" role="status">${safe(message||progress)}</p><button class="btn" data-grade="retry">Réessayer</button>`:''}${chosen}`;
+    panel.innerHTML=`${retry?`<p class="review-state" role="status">${safe(message)}</p><button class="btn" data-grade="retry">Réessayer</button>`:''}${chosen}`;
   }
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-grade]');
