@@ -53,6 +53,7 @@ async function refreshClub() {
   games=[...online,...games.filter(g=>g.mode!=='online')];
   updateBadge();
   if (changed && location.hash==='#amis') friendsPage();
+  if (changed && location.hash==='#bibliotheque') library();
   if (changed && document.querySelector('.size-pick')) lobby(true);
 }
 function requireAccount(action) {

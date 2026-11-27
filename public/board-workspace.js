@@ -61,6 +61,13 @@ function gameNavigation(g,index){
   return `<div class="review-nav"><span>${forkPosition===null?'Partie':'Variante'} · ${index} / ${g.moves.length}</span><div>${steps.map(([i,label,d])=>`<button aria-label="${label}" data-action="step:${d}" ${d===index?'disabled':''}>${icon(i,true)}</button>`).join('')}</div></div>
   <input id="slider" aria-label="Position dans la partie" type="range" min="0" max="${g.moves.length}" value="${index}">`;
 }
+function reviewHeading(overview){
+  const recorded=Boolean(reviewSource?.moves.length);
+  return `<header class="review-mast ${overview?'report-heading':'analysis-head'}">
+    <div><a class="review-back" href="${recorded?'#bibliotheque':'#analyse'}">${icon('left',true)} ${recorded?'Bibliothèque':'Analyse'}</a>
+    <h1 tabindex="-1">${overview?'Bilan de partie':recorded?'Analyse des lignes':'Analyse libre'}</h1></div>
+    ${recorded?btn(overview?'Voir les lignes':'Bilan',overview?'explore-review':'review-overview',overview?'analysis':'book'):`<span class="board-size">${game.n} × ${game.n}</span>`}</header>`;
+}
 function drawGame(){
   const analysis=reviewing||game.mode==='study', side=boardShell();
   displayedGame={id:game.id,position:forkPosition??position};displayedSetup=false;
@@ -93,11 +100,9 @@ function drawGame(){
   }
   if(reviewing && reviewOverview){
     if(main.querySelector('.review-report')?.dataset.record!==game.id){
-      side.innerHTML=`<section class="review-report"><div class="report-scroll">
-        <header class="report-heading"><button class="review-back" data-action="library" aria-label="Bibliothèque">${icon('left',true)}<span>Bibliothèque</span></button><div><h1 tabindex="-1">Bilan de partie</h1>
-          <p>${safe(gameTitle(game))} <span>·</span> ${game.n} × ${game.n} <span>·</span> ${game.moves.length} coups</p></div></header>
-        <section id="review-summary" aria-label="Bilan de la partie"></section></div>
-        <footer class="report-foot">${btn('Entrer dans l’analyse','explore-review','right',true)}</footer></section>`;
+      side.innerHTML=`<section class="review-report"><div class="report-scroll">${reviewHeading(true)}
+        <section id="review-summary" aria-label="Courbe de la partie"></section>
+        <section class="report-stats"><h2>${safe(gameTitle(game))}</h2><div id="review-stats"></div></section></div></section>`;
       main.querySelector('.review-report').dataset.record=game.id;
     }
     MoveReview.render();
@@ -110,14 +115,14 @@ function drawGame(){
   if(analysis){
     const scroll=side.querySelector('.analysis-body')?.scrollTop||0;
     side.innerHTML=`<div class="analysis-panel">
-      <header class="analysis-head"><div>${reviewSource?.moves.length?`<button class="review-back" data-action="review-overview">${icon('left',true)} Bilan de partie</button>`:`<button class="review-back" data-action="library">${icon('left',true)} Bibliothèque</button>`}
-      <h1 tabindex="-1">Analyse des lignes</h1></div><span class="board-size">${game.n} × ${game.n}</span></header>
+      <div class="analysis-body">${reviewHeading(false)}
+      ${reviewSource?.moves.length?'<section id="review-summary" aria-label="Courbe de la partie"></section>':''}
       <div class="analysis-position">${info}${gameNavigation(game,position)}</div>
-      <div class="analysis-body"><div id="move-verdict" hidden></div><section id="local-analysis"></section>
+      <div id="move-verdict" hidden></div><section id="local-analysis"></section>
       <section id="game-review"></section></div><footer class="analysis-foot">
       ${forkPosition===null?'':'<p>Variante depuis le coup '+forkPosition+'</p>'}
       <div class="actions">${btn('Passer','pass')}${forkPosition===null?'':btn('Revenir au coup '+forkPosition,'original','left')}
-      ${btn('Enregistrer la variante','branch','plus')}${reviewSource?.moves.length?btn('Bibliothèque','library','book'):''}</div></footer></div>`;
+      ${btn('Enregistrer la variante','branch','plus')}</div></footer></div>`;
     MoveReview.render();
     LocalAnalysis.mount(game,position,states);
     side.querySelector('.analysis-body').scrollTop=scroll;

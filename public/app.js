@@ -100,8 +100,6 @@ function row(g,link){
 
 let boardSize=[9,13,19].includes(get('board-size',19))?get('board-size',19):19;
 let incomingRoom=null;
-const playMode=(title,detail,glyph,action,primary=false)=>`<button class="play-mode ${primary?'featured':''}" data-action="${action}">
-  <span class="action-symbol">${icon(glyph)}</span><span><strong>${title}</strong><small>${detail}</small></span></button>`;
 function lobby(keepBoard=false){
   const side=keepBoard?panelForCurrentBoard():emptyStage(boardSize);
   if(keepBoard) boardSize=displayedSetup?setupBoard.n:readGame(displayedGame?.id)?.n??boardSize;
@@ -172,13 +170,46 @@ function waitingRoom(r){
   ${r.kind==='invite'?`<input id="url" aria-label="Lien d’invitation" readonly value="${safe(link)}">${btn('Copier le lien','copy','share',true)}`:''}<div class="side-foot">${btn('Annuler','cancel-room')}</div></div>`;
 }
 
+const studySymbols={
+  library:'<path fill="#9c7956" d="m5 30 25-6 14 6-25 9z"/><path fill="#dcc29b" d="m6 25 23-6 15 6-25 8z"/><path fill="#a87d50" d="M6 18 29 11l15 7v6l-25 8-13-7z"/><path fill="#ead6b8" d="m7 18 23-7 13 7-24 8z"/><path d="m13 19 16-5m-11 8 15-5m-11-2 9 5"/><circle cx="26" cy="18" r="2.4" fill="#39322b"/>',
+  free:'<path d="M10 35v-7c0-7 6-7 12-7s9-3 9-10m-9 10c5 0 6 9 14 9" fill="none"/><circle cx="10" cy="35" r="5" fill="#e6d0ab"/><circle cx="31" cy="10" r="5" fill="#aa835a"/><circle cx="36" cy="30" r="4" fill="#524537"/>',
+  setup:'<rect x="6" y="6" width="35" height="35" rx="4" fill="#c6a475"/><path d="M16 9v29m11-29v29M9 16h29M9 27h29"/><circle cx="16" cy="16" r="5" fill="#302e2b"/><circle cx="27" cy="27" r="5" fill="#f1e4cd"/>',
+  import:'<path d="M12 5h17l8 8v25H12z" fill="#d7bd96"/><path d="M29 5v9h8M17 21h9m-9 5h6"/><path d="M31 24v16m-6-6 6 6 6-6" stroke="#e7c696" stroke-width="3.5"/>'
+};
+function studySymbol(key){
+  return `<svg class="study-symbol" viewBox="0 0 48 46" fill="none" stroke="#594a39" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${studySymbols[key]}</svg>`;
+}
+function analysisHome(){
+  const side=emptyStage(boardSize);
+  seats('Noir','Blanc');
+  const tools=[
+    ['library','Bibliothèque','Lire et revoir les parties enregistrées','#bibliotheque'],
+    ['free','Analyse libre','Explorer des variantes sur un goban vide','#libre'],
+    ['setup','Composer une position','Placer les pierres et choisir le trait','#position'],
+    ['import','Importer un SGF','Ouvrir une partie depuis un fichier',null]
+  ];
+  side.innerHTML=`<section class="study-home"><h1>Analyse</h1><div class="study-tools">${tools.map(([key,title,detail,href])=>{
+    const tag=href?'a':'button';
+    return `<${tag} class="study-tool tool-${key}" ${href?'href="'+href+'"':'type="button" data-action="import"'}>${studySymbol(key)}<span><strong>${title}</strong><small>${detail}</small></span>${icon('right',true)}</${tag}>`;
+  }).join('')}</div></section>`;
+  enableImport(side);
+}
 function library(){
-  const side=panelForCurrentBoard();
-  side.innerHTML=`<div class="side-content"><div class="launch-modes">
-    ${playMode('Importer une partie','Ouvrir un fichier SGF','file','import',true)}
-    ${playMode('Définir une position','Placer les pierres sur le goban','edit','setup')}</div>
-    <input type="file" id="sgf-input" accept=".sgf,application/x-go-sgf" hidden>
-    ${games.length?`<section class="records"><h2>Mes parties et études</h2>${games.map(g=>row(g,'etude')).join('')}</section>`:''}</div>`;
+  const side=emptyStage(boardSize);
+  seats('Noir','Blanc');
+  const records=games.filter(g=>g.ready!==false);
+  side.innerHTML=`<section class="study-library"><header><a class="review-back" href="#analyse">${icon('left',true)} Analyse</a>
+    <div>${studySymbol('library')}<h1>Bibliothèque</h1></div></header>
+    <div class="library-shelf">${records.length?records.map(g=>{
+      const title=g.mode==='online' && g.black && g.white?g.black+' – '+g.white:gameTitle(g);
+      return `<article class="library-record"><div><h2>${safe(title)}</h2><small>${g.n} × ${g.n} · ${g.moves.length} coups</small></div>
+        <div class="record-links"><a href="#etude/${g.id}/lignes/0">Lire</a>${g.moves.length?`<a href="#etude/${g.id}">Bilan</a>`:''}</div></article>`;
+    }).join(''):'<p class="library-empty">Aucune partie enregistrée.</p>'}</div>
+    <footer>${btn('Importer un SGF','import','file')}</footer></section>`;
+  enableImport(side);
+}
+function enableImport(side){
+  side.insertAdjacentHTML('beforeend','<input type="file" id="sgf-input" accept=".sgf,application/x-go-sgf" hidden>');
   $('#sgf-input').onchange=async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
@@ -247,7 +278,7 @@ async function onlineMove(p){
   catch(err){if(version===routeVersion)toast(err.message)}
   finally{pendingMove=false}
 }
-let reviewSource=null, forkPosition=null, reviewOverview=false, lastReview=null;
+let reviewSource=null, forkPosition=null, reviewOverview=false;
 function setReviewView(overview,ply){
   ReviewSummary.leave();
   LocalAnalysis.detach();
@@ -323,12 +354,11 @@ async function route(){
     setReviewView(!!reviewSource.moves.length&&view!=='lignes',view==='lignes'?linePly(reviewSource):forkPosition??position);
     return;
   }
-  if(reviewing)lastReview={source:reviewSource,game,position,forkPosition,overview:reviewOverview,board:$('#live-goban')?.dataset.position};
   reviewOverview=false;
   MoveReview.stopPreparation();BotPlayers.stop();MoveReview.stop();LocalAnalysis.detach();modal.close();clearTimeout(pollTimer);const version=++routeVersion;
   const hadBoard=!!$('#board-desk')||!!$('.review-report');
   activeRoom=null;reviewing=false;reviewSource=null;forkPosition=null;
-  const tab=['etude','position','analyse','bibliotheque'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
+  const tab=['etude','position','analyse','bibliotheque','libre'].includes(key)?'analyse':key==='amis'?'amis':'jouer';
   header(tab);
   updateBadge();
   main.setAttribute('aria-label',tabs.find(t=>t.key===tab).label);
@@ -353,18 +383,8 @@ async function route(){
       openReview(game,view==='lignes'?linePly(game):twoPasses(game.moves)?game.moves.length-2:game.moves.length,view==='lignes');
     }else{position=game.moves.length;drawGame()}
   }else if(key==='amis'){friendsPage()}
-  else if(key==='analyse'&&lastReview&&displayedGame?.id===lastReview.source.id&&$('#live-goban')?.dataset.position===lastReview.board){
-    reviewing=true;reviewSource=lastReview.source;game=lastReview.game;
-    position=lastReview.position;forkPosition=lastReview.forkPosition;reviewOverview=lastReview.overview;
-    MoveReview.begin(reviewSource);drawGame();if(!reviewOverview)LocalAnalysis.enable();
-  }
-  else if(key==='analyse'&&hadBoard&&displayedGame&&readGame(displayedGame.id)&&readGame(displayedGame.id).ready!==false){
-    const source=readGame(displayedGame.id);
-    const index=displayedGame.position;
-    openReview(source,index);
-  }
-  else if(key==='analyse'&&hadBoard&&displayedSetup)showSetup();
-  else if(key==='analyse')openReview(newGame(boardSize,'study',''),0);
+  else if(key==='analyse')analysisHome();
+  else if(key==='libre')openReview(newGame(boardSize,'study',''),0);
   else if(key==='bibliotheque')library();
   else if(key==='position')openSetup();
   else {
@@ -430,7 +450,7 @@ document.addEventListener('click',async e=>{
   }
 });
 document.addEventListener('keydown',event=>{
-  if(!reviewing||reviewOverview||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;
+  if(!reviewing||reviewOverview||modal.open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea,[role=slider]'))return;
   if(event.key==='Escape'&&forkPosition!==null){MoveReview.manual();returnToRecord();return}
   const step={ArrowLeft:-1,ArrowRight:1}[event.key];
   if(step){event.preventDefault();position=Math.max(0,Math.min(game.moves.length,position+step));drawGame()}

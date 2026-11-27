@@ -3,9 +3,9 @@ const ReviewSummary=(()=>{
   const grades=['brilliant','best','good','inaccuracy','mistake','missed','blunder'];
   const format=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:1});
   const percent=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
-  let metric='score',observer=null,inspected=null;
+  let metric='score',observer=null;
   function leave(){
-    observer?.disconnect();observer=null;inspected=null;
+    observer?.disconnect();observer=null;
   }
   function reset(){leave();metric='score'}
 
@@ -43,7 +43,8 @@ const ReviewSummary=(()=>{
   }
   function mount(props){
     const {record,entries,badges,selected,explore,select,progress,retry}=props;
-    const panel=$('#review-summary');
+    const panel=$('#review-summary'),stats=$('#review-stats');
+    if(stats)stats.innerHTML=countsTable(record,entries,badges);
     observer?.disconnect();
     const focus=document.activeElement;
     const ref=panel.contains(focus)?focus?.dataset.focus:null;
@@ -53,7 +54,7 @@ const ReviewSummary=(()=>{
     const extent=isWin?100:scoreRange(values);
     const tick=isWin?['100 %','50 %','0 %']:['+'+format.format(extent),'0','−'+format.format(extent)];
     panel.innerHTML=`<section class="report-chart">
-      <header class="chart-heading"><div><h2>Évolution de la partie</h2><p>${isWin?'Chances de victoire de Noir':'Avance estimée pour Noir'}</p></div>
+      <header class="chart-heading"><h2>Évaluation de la partie</h2>
       <div class="chart-switch" role="group" aria-label="Mesure de la courbe">${[['score','Points'],['win','Victoire']].map(([id,label])=>`<button data-focus="${id}" data-metric="${id}" aria-pressed="${metric===id}">${label}</button>`).join('')}</div></header>
       <div class="plot-row"><div class="plot-scale" aria-hidden="true">${tick.map(t=>'<span>'+t+'</span>').join('')}</div>
       <div class="chart-hit" data-focus="chart" role="slider" tabindex="0" aria-label="Coup à explorer, appuyez sur Entrée pour l’analyser" aria-valuemin="0" aria-valuemax="${total}">
@@ -62,10 +63,9 @@ const ReviewSummary=(()=>{
       <div class="chart-readout"></div>
       <div class="report-progress"><span role="status">${safe(progress)}</span><span>${entries.length} / ${total} coups</span>
       ${retry?'<button data-grade="retry" class="text-btn">Réessayer</button>':''}</div>
-      </section>
-      <section class="report-stats">${countsTable(record,entries,badges)}</section>`;
+      </section>`;
     const hit=panel.querySelector('.chart-hit'),svg=hit.querySelector('svg'),readout=panel.querySelector('.chart-readout');
-    let w=0,h=0,active=inspected??selected;
+    let w=0,h=0,active=selected;
     const x=ply=>8+(w-16)*ply/Math.max(1,total);
     const y=v=>9+(h-18)*(isWin?(1-v/100):(1-v/extent)/2);
     function inspect(ply){
@@ -92,23 +92,25 @@ const ReviewSummary=(()=>{
       if(!w||!h)return;
       const points=values.map((v,i)=>x(i).toFixed(2)+' '+y(v).toFixed(2));
       const line='M'+points.join(' L');
+      const zero=y(isWin?50:0);
+      const area=line+'V'+zero+'H'+x(0)+'Z';
       const markers=turns.map(e=>`<circle class="plot-move grade-${e.badge}" cx="${x(e.ply)}" cy="${y(values[e.ply])}" r="3.8"/>`);
       svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
-      svg.innerHTML=`<defs><linearGradient id="plot-wash" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="var(--wood)" stop-opacity=".28"/><stop offset="1" stop-color="var(--wood)" stop-opacity=".02"/></linearGradient></defs>
-        ${[0,.25,.5,.75,1].map(t=>`<path class="plot-grid ${t===.5?'equator':''}" d="M0 ${9+(h-18)*t}H${w}"/>`).join('')}
-        ${points.length?`<path fill="url(#plot-wash)" d="${line}V${h}H${x(0)}Z"/><path class="plot-line" d="${line}"/>${markers.join('')}`:''}
+      svg.innerHTML=`<defs><clipPath id="plot-above"><rect width="${w}" height="${zero}"/></clipPath></defs>
+        ${[0,.5,1].map(t=>`<path class="plot-grid ${t===.5?'equator':''}" d="M0 ${9+(h-18)*t}H${w}"/>`).join('')}
+        ${points.length?`<path class="plot-below" d="${area}"/><path class="plot-above" clip-path="url(#plot-above)" d="${area}"/><path class="plot-line" d="${line}"/>${markers.join('')}`:''}
         <g class="plot-current"><path d="M0 2V${h-2}"/><circle r="4.6"/></g>`;
       inspect(active);
     }
     draw();observer=new ResizeObserver(draw);observer.observe(hit);
     const pointerPly=e=>Math.max(0,Math.min(total,Math.round((e.clientX-hit.getBoundingClientRect().left-8)*total/(w-16))));
     hit.onpointermove=e=>{if(e.pointerType!=='touch'){hit.querySelector('.plot-label').hidden=false;inspect(pointerPly(e))}};
-    hit.onpointerleave=()=>{hit.querySelector('.plot-label').hidden=true;inspect(inspected??selected)};
+    hit.onpointerleave=()=>{hit.querySelector('.plot-label').hidden=true;inspect(selected)};
     hit.onclick=e=>explore(pointerPly(e));
     hit.onkeydown=e=>{
       if(e.key==='Enter'||e.key===' '){e.preventDefault();explore(active);return}
       const dest={ArrowRight:active+1,ArrowUp:active+1,ArrowLeft:active-1,ArrowDown:active-1,Home:0,End:total}[e.key];
-      if(dest!==undefined){e.preventDefault();inspected=Math.max(0,Math.min(total,dest));select(inspected);inspect(inspected)}
+      if(dest!==undefined){e.preventDefault();select(Math.max(0,Math.min(total,dest)));$('#review-summary .chart-hit')?.focus({preventScroll:true})}
     };
     for(const button of panel.querySelectorAll('[data-metric]'))button.onclick=()=>{metric=button.dataset.metric;mount(props)};
     if(ref)panel.querySelector(`[data-focus="${ref}"]`)?.focus({preventScroll:true});

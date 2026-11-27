@@ -58,14 +58,16 @@ const MoveReview=(()=>{
     caption.innerHTML=`<div class="verdict-title">${badge(e)}<small>Coup ${e.ply} · ${e.color===1?'Noir':'Blanc'} ${moveName(e)}</small></div><p>${safe(e.explanation)}</p>`;
   }
   function jump(ply){
-    game=reviewSource;forkPosition=null;replay=null;position=ply;drawGame();
+    game=reviewSource;forkPosition=null;replay=null;position=ply;
+    if(!reviewOverview)history.replaceState(null,'','#etude/'+reviewSource.id+'/lignes/'+ply);
+    drawGame();
   }
   function render(){
     const progress=message||((record&&entries.length===record.moves.length)?'Revue terminée':'Analyse sur cet appareil');
     const retry=Boolean(message);
-    if(record&&reviewOverview&&$('#review-summary')){
-      ReviewSummary.mount({record,entries,badges,selected:position,select:ply=>{position=ply;drawGame()},explore:ply=>switchReview(false,ply),progress:message||progress,retry});
-      return;
+    if(record && $('#review-summary')){
+      ReviewSummary.mount({record,entries,badges,selected:Math.min(position,forkPosition??position),select:jump,explore:ply=>reviewOverview?switchReview(false,ply):jump(ply),progress:message||progress,retry});
+      if(reviewOverview)return;
     }
     const panel=$('#game-review');if(!panel)return;
     const e=!replay && forkPosition===null?entries[position-1]:null;

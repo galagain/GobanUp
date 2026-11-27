@@ -138,3 +138,59 @@ main:has(#board-desk){
 @media(max-width:540px){
   main:has(#board-desk){width:100%;margin:0;padding-inline:3.5vw}
 }
+
+/* Analysis desk and library */
+.study-home,.study-library{padding:clamp(16px,2.2vw,32px);color:var(--ink)}
+.study-home h1,.study-library h1,.review-mast h1{margin:0;font-weight:600;font-size:clamp(1.5rem,2.2vw,2.3rem);letter-spacing:-.045em;line-height:1.12}
+.study-tools{display:grid;gap:9px;margin-top:22px}
+.study-tool{display:flex;align-items:center;gap:14px;width:100%;min-width:0;padding:13px;text-align:left;background:#302e2a;border:1px solid #49453d;border-radius:12px}
+.study-tool>span{flex:1;min-width:0}.study-tool strong,.study-tool small{display:block}
+.study-tool strong{font-size:1rem;font-weight:620}.study-tool small,.library-record small{color:var(--muted);font-size:.8rem;margin-top:3px}
+.study-tool>.small-icon{width:15px;flex:none;color:var(--wood)}
+.study-symbol{width:43px;height:43px;flex:none;padding:3px;background:#3c352c;border-radius:10px}
+.study-tool.tool-library{padding-block:19px;background:linear-gradient(112deg,#4c4030,#332e27);border-color:#776247}
+.tool-library .study-symbol{width:60px;height:60px;background:#514333}
+.tool-library strong{font-size:1.22rem}.study-tool:hover,.record-links a:hover{background:#403a30;border-color:#9f8562}
+.study-library header>div{display:flex;align-items:center;gap:12px;margin:15px 0 24px}
+.library-shelf{border-block:1px solid var(--edge)}
+.library-record{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+.library-record+.library-record{border-top:1px solid var(--edge)}
+.library-record h2{font-size:.96rem;font-weight:590;overflow-wrap:anywhere}
+.record-links{display:flex;align-items:center;gap:5px;flex:none}
+.record-links a{border:1px solid #4b453d;background:#322f2b;border-radius:6px;padding:6px 10px;font-size:.79rem}
+.record-links a:last-child{color:var(--wood-light)}
+.library-empty{color:var(--muted);padding-block:20px}.study-library footer{margin-top:16px}
+
+/* The same timeline follows the original game through the report and variations. */
+#desk-tools:has(.review-report,.analysis-panel){container-type:size}
+.review-mast{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 14px;border:0}
+.review-mast .review-back{border:0;padding:0 0 5px}
+.review-mast .btn{font-size:.8rem;min-height:32px;padding:5px 10px;flex:none}
+.review-mast .btn svg{width:15px}
+.report-scroll,.analysis-body{padding:var(--reading-inset)}
+#review-summary{position:sticky;top:0;z-index:1;background:var(--panel);padding-bottom:7px}
+.report-chart{padding:12px 13px 9px;border:1px solid #50483c;background:#302c26;border-radius:10px}
+.chart-heading h2{font-size:.9rem;line-height:1.2;font-weight:620;margin:0}
+.chart-switch{background:#292621;padding:2px}.chart-switch button{font-size:.71rem;padding:3px 7px}
+.chart-switch button[aria-pressed=true]{background:#534735;color:#f3dfbf}
+.plot-row{margin-top:5px}.chart-hit{height:clamp(52px,15cqh,123px)}
+.plot-above{fill:#d2b88e;fill-opacity:.32}.plot-below{fill:#b88c65;fill-opacity:.18}
+.plot-grid{stroke:#6e6354;stroke-opacity:.55}.plot-line{stroke:#e9cda4}
+.plot-current path{stroke:var(--wood-light)}.chart-readout{margin-top:5px;font-size:.78rem}
+.chart-wait{background:#302c26}.report-progress{margin-top:2px;font-size:.67rem}
+.report-stats{border:0;padding-top:10px}.report-stats h2{margin-bottom:10px}
+.analysis-position{border-radius:8px;padding:8px 12px;margin-bottom:14px;background:#302e29}
+#local-analysis .variation{border:1px solid #49443b;margin-top:7px;padding:9px 11px;border-radius:8px;background:#302e29}
+#local-analysis .variation-top{min-height:28px}
+@container(max-height:440px){
+  .chart-hit{height:clamp(38px,13cqh,60px)}
+  .report-chart{padding:6px 9px}.plot-ticks{display:none}
+  .review-mast{padding-bottom:8px}.review-mast h1{font-size:1.28rem}
+}
+@media(max-width:690px){
+  #board-desk .desk-side:has(.analysis-panel){overflow:hidden}
+  .analysis-panel{height:100%;min-height:0}.analysis-body{overflow:auto}
+  .report-scroll,.analysis-body,.study-home,.study-library{padding:12px}
+  .study-tools{margin-top:12px;gap:6px}.study-tool,.study-tool.tool-library{padding:9px 11px}
+  .tool-library .study-symbol{width:45px;height:45px}
+}
